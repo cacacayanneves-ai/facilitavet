@@ -174,11 +174,21 @@ export function MapWorkspace({
                     <span className="tabular w-10 shrink-0 text-[11px] text-ink-500">
                       {formatTime(stop.estimatedArrival)}
                     </span>
-                    <span className="min-w-0 flex-1 truncate text-xs text-ink-800">{stop.clinicName}</span>
+                    <span
+                      className={cn(
+                        'min-w-0 flex-1 truncate text-xs',
+                        stop.status === 'CANCELLED'
+                          ? 'text-ink-400 line-through decoration-ink-300'
+                          : 'text-ink-800',
+                      )}
+                    >
+                      {stop.clinicName}
+                    </span>
                     <span className="hidden truncate text-[11px] text-ink-400 sm:block">
                       {stop.neighborhood}
                     </span>
                     {stop.status === 'COMPLETED' && <Badge tone="positive">Feita</Badge>}
+                    {stop.status === 'CANCELLED' && <Badge tone="neutral">Cancelada</Badge>}
                   </li>
                 ))}
               </ol>

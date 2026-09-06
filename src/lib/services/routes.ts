@@ -1,14 +1,16 @@
+import type { Category } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { getMapsProvider } from '@/lib/providers/maps';
 import {
   DEFAULT_PREFERENCES,
   recalculateRoute,
+  requiredCategoriesFor,
   suggestAlternatives,
   type PlannerClinic,
 } from '@/lib/route-planner';
 import { combineDateAndTime } from './planning';
-import { toPlannerPreferences } from './settings';
+import { parseCategoryRules, toPlannerPreferences } from './settings';
 
 /**
  * Edicao manual do roteiro (secoes 30 e 31).
@@ -119,6 +121,18 @@ export async function swapStop(args: {
     throw new Error('Essa clínica já está nesta rota.');
   }
 
+  // A troca nao pode furar o ciclo comercial do mes.
+  const requiredCategories = requiredCategoriesFor(
+    parseCategoryRules(settings.categoryRules),
+    route.monthlyPlan.year,
+    route.monthlyPlan.month,
+  );
+  if (!requiredCategories.includes(replacement.category)) {
+    throw new Error(
+      `${replacement.name} é ${replacement.category.replace('CAT', 'Cat ')}, categoria fora do ciclo deste mês (${requiredCategories.map((c) => c.replace('CAT', 'Cat ')).join(' + ')}).`,
+    );
+  }
+
   const clinics = route.stops.map((stop) =>
     stop.sequence === args.sequence ? toPlannerClinic(replacement) : toPlannerClinic(stop.clinic),
   );
@@ -147,7 +161,16 @@ export async function alternativesForStop(args: {
 }) {
   const context = await loadRouteContext(args.routeId, args.userId);
   if (!context) return null;
-  const { route, user } = context;
+  const { route, user, settings } = context;
+
+  // Alternativas precisam ser ADEQUADAS, nao apenas proximas: uma clinica Cat 3
+  // num mes de Cat 1 + Cat 2 esta fora do ciclo comercial e nao pode ser
+  // sugerida, por mais perto que fique.
+  const requiredCategories = requiredCategoriesFor(
+    parseCategoryRules(settings.categoryRules),
+    route.monthlyPlan.year,
+    route.monthlyPlan.month,
+  ) as Category[];
 
   // Nao sugerimos clinicas ja planejadas no mesmo mes: trocar por outra que ja
   // esta agendada nao resolve nada, so move o problema de dia.
@@ -161,6 +184,7 @@ export async function alternativesForStop(args: {
     where: {
       organizationId: user.organizationId,
       active: true,
+      category: { in: requiredCategories },
       latitude: { not: null },
       longitude: { not: null },
       id: { notIn: [...excluded] },

@@ -52,13 +52,13 @@ export function brazilianHolidays(year: number): HolidayEntry[] {
   const easter = easterSunday(year);
 
   const fixed: Array<[number, number, string]> = [
-    [1, 1, 'Confraternizacao Universal'],
+    [1, 1, 'Confraternização Universal'],
     [4, 21, 'Tiradentes'],
     [5, 1, 'Dia do Trabalho'],
-    [9, 7, 'Independencia do Brasil'],
+    [9, 7, 'Independência do Brasil'],
     [10, 12, 'Nossa Senhora Aparecida'],
     [11, 2, 'Finados'],
-    [11, 15, 'Proclamacao da Republica'],
+    [11, 15, 'Proclamação da República'],
     [11, 20, 'Dia Nacional de Zumbi e da Consciencia Negra'],
     [12, 25, 'Natal'],
   ];
@@ -73,7 +73,7 @@ export function brazilianHolidays(year: number): HolidayEntry[] {
     { date: key(shift(easter, -48)), name: 'Carnaval (segunda-feira)', country: 'BR' },
     { date: key(shift(easter, -47)), name: 'Carnaval', country: 'BR' },
     { date: key(shift(easter, -2)), name: 'Sexta-feira Santa', country: 'BR' },
-    { date: key(easter), name: 'Pascoa', country: 'BR' },
+    { date: key(easter), name: 'Páscoa', country: 'BR' },
     { date: key(shift(easter, 60)), name: 'Corpus Christi', country: 'BR' },
   );
 
@@ -83,7 +83,7 @@ export function brazilianHolidays(year: number): HolidayEntry[] {
 /** Feriados estaduais/municipais de Sao Paulo usados pela demo. */
 export function saoPauloHolidays(year: number): HolidayEntry[] {
   return [
-    { date: key(new Date(Date.UTC(year, 0, 25))), name: 'Aniversario de Sao Paulo', country: 'BR', state: 'SP', city: 'Sao Paulo' },
-    { date: key(new Date(Date.UTC(year, 6, 9))), name: 'Revolucao Constitucionalista', country: 'BR', state: 'SP', city: '' },
+    { date: key(new Date(Date.UTC(year, 0, 25))), name: 'Aniversário de São Paulo', country: 'BR', state: 'SP', city: 'Sao Paulo' },
+    { date: key(new Date(Date.UTC(year, 6, 9))), name: 'Revolução Constitucionalista', country: 'BR', state: 'SP', city: '' },
   ];
 }

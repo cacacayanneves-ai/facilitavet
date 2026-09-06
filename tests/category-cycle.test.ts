@@ -75,3 +75,28 @@ describe('exclusividade entre categorias', () => {
     expect(overlaps[0].categories.sort()).toEqual(['CAT1', 'CAT3']);
   });
 });
+
+describe('adequacao das alternativas de troca', () => {
+  /**
+   * Regressao: "Trocar visita" chegou a sugerir clinicas Cat 3 num mes de
+   * Cat 1 + Cat 2. Alternativa PROXIMA nao basta — ela precisa ser ADEQUADA ao
+   * ciclo comercial do mes, senao a troca fura a regra que o motor respeitou.
+   */
+  it('so aceita categorias exigidas pelo mes', () => {
+    const setembro = requiredCategoriesFor(rules, 2026, 9);
+    const outubro = requiredCategoriesFor(rules, 2026, 10);
+
+    expect(setembro).toEqual(['CAT1', 'CAT2']);
+    expect(setembro).not.toContain('CAT3');
+    expect(outubro).toEqual(['CAT1', 'CAT3']);
+    expect(outubro).not.toContain('CAT2');
+
+    const carteira = [
+      { id: '1', category: 'CAT1' as const },
+      { id: '2', category: 'CAT2' as const },
+      { id: '3', category: 'CAT3' as const },
+    ];
+    const elegiveisSetembro = carteira.filter((c) => setembro.includes(c.category));
+    expect(elegiveisSetembro.map((c) => c.id)).toEqual(['1', '2']);
+  });
+});

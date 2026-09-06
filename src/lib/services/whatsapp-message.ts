@@ -34,7 +34,7 @@ export interface RouteMessageInput {
 const NUMBER_EMOJI = ['0️⃣', '1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
 
 const WEEKDAYS = [
-  'Domingo', 'Segunda-feira', 'Terca-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sabado',
+  'Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado',
 ];
 
 export function buildRouteMessage(input: RouteMessageInput): string {
@@ -42,7 +42,7 @@ export function buildRouteMessage(input: RouteMessageInput): string {
   const weekday = WEEKDAYS[input.date.getUTCDay()];
   const dateLabel = formatDateBR(input.date);
 
-  lines.push('☀️ Bom dia! Seu roteiro de hoje esta pronto.');
+  lines.push('☀️ Bom dia! Seu roteiro de hoje está pronto.');
   lines.push('');
   lines.push(`📅 ${weekday}, ${dateLabel}`);
   lines.push(`${input.stops.length} visita${input.stops.length === 1 ? '' : 's'} programada${input.stops.length === 1 ? '' : 's'}`);
@@ -60,7 +60,7 @@ export function buildRouteMessage(input: RouteMessageInput): string {
   if (input.include.distance) {
     lines.push('');
     const prefix = input.estimated ? '≈ ' : '';
-    lines.push(`🚗 Distancia: ${prefix}${formatKm(input.totalDistanceMeters)}`);
+    lines.push(`🚗 Distância: ${prefix}${formatKm(input.totalDistanceMeters)}`);
     lines.push(`⏱️ Deslocamento: ${prefix}${formatDuration(input.totalDurationSeconds)}`);
     if (input.estimated) {
       lines.push('(estimativa — rota real depende da Google Routes API)');

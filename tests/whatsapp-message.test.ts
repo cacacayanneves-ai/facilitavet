@@ -30,7 +30,7 @@ describe('mensagem do WhatsApp', () => {
     expect(message).toContain('3 visitas programadas');
     expect(message).toContain('1️⃣ 08:00 — Clínica Veterinária Alfa');
     expect(message).toContain('📍 Vila Mariana');
-    expect(message).toContain('🚗 Distancia: 42 km');
+    expect(message).toContain('🚗 Distância: 42 km');
     expect(message).toContain('⏱️ Deslocamento: 3h10');
     expect(message).toContain(baseInput.routeUrl);
   });
