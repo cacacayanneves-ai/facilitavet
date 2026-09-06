@@ -240,8 +240,8 @@ export function PlanningWorkspace(props: Props) {
                       className={cn(
                         'tabular relative aspect-square rounded-lg text-xs font-medium transition-all duration-150',
                         day.available && 'bg-brand-50 text-brand-800 hover:bg-brand-100 hover:ring-1 hover:ring-brand-300',
-                        day.reason === 'BLOCKED' && 'bg-[var(--color-danger-soft)] text-[color-mix(in_oklch,var(--color-danger),black_15%)] hover:brightness-95',
-                        day.reason === 'HOLIDAY' && 'bg-[var(--color-warning-soft)] text-[color-mix(in_oklch,var(--color-warning),black_40%)] cursor-not-allowed',
+                        day.reason === 'BLOCKED' && 'bg-[var(--color-danger-soft)] text-[var(--color-danger-text)] hover:brightness-95',
+                        day.reason === 'HOLIDAY' && 'bg-[var(--color-warning-soft)] text-[var(--color-warning-text)] cursor-not-allowed',
                         (day.reason === 'WEEKEND' || day.reason === 'OFF_DAY') && 'bg-ink-100 text-ink-300 cursor-not-allowed',
                       )}
                     >
@@ -400,7 +400,7 @@ function ResultCard({ result }: { result: GenerationResult }) {
     <Card className="animate-[rise_0.35s_cubic-bezier(0.16,1,0.3,1)] border-brand-200">
       <CardContent className="space-y-3">
         <div className="flex items-center gap-2">
-          <span className="flex size-7 items-center justify-center rounded-lg bg-brand-600 text-white">
+          <span className="flex size-7 items-center justify-center rounded-lg bg-brand-600 text-[var(--color-on-brand)]">
             <Sparkles className="size-3.5" />
           </span>
           <p className="text-sm font-semibold text-ink-900">Seu mês está pronto 🚀</p>

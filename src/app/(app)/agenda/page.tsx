@@ -105,7 +105,7 @@ export default async function AgendaPage({
               action={
                 <Link
                   href={`/planejamento?year=${year}&month=${month}`}
-                  className="inline-flex h-9 items-center rounded-lg bg-brand-700 px-4 text-sm font-medium text-white transition-colors hover:bg-brand-800"
+                  className="inline-flex h-9 items-center rounded-lg bg-brand-700 px-4 text-sm font-medium text-[var(--color-on-brand)] transition-colors hover:bg-brand-800"
                 >
                   Criar roteiro
                 </Link>
@@ -137,9 +137,9 @@ export default async function AgendaPage({
                 className={cn(
                   'flex h-full min-h-24 flex-col rounded-xl border p-2 transition-all duration-150 sm:min-h-28',
                   route
-                    ? 'border-ink-200 bg-white shadow-[var(--shadow-subtle)] hover:-translate-y-0.5 hover:shadow-[var(--shadow-card)]'
+                    ? 'border-ink-200 bg-surface shadow-[var(--shadow-subtle)] hover:-translate-y-0.5 hover:shadow-[var(--shadow-card)]'
                     : day.available
-                      ? 'border-dashed border-ink-300 bg-white/50'
+                      ? 'border-dashed border-ink-300 bg-surface/50'
                       : 'border-ink-200 bg-ink-100/60',
                   isToday && 'ring-2 ring-brand-500 ring-offset-1',
                 )}

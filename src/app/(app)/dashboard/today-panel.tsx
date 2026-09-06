@@ -35,10 +35,10 @@ export function TodayPanel({
 
   if (!active || active.stops.length === 0) {
     return (
-      <Card className="border-brand-200 bg-gradient-to-br from-brand-50 to-white">
+      <Card className="border-brand-200 bg-gradient-to-br from-brand-50 to-surface">
         <CardContent className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
-            <span className="flex size-9 items-center justify-center rounded-lg bg-white text-brand-600 shadow-[var(--shadow-subtle)]">
+            <span className="flex size-9 items-center justify-center rounded-lg bg-surface text-brand-600 shadow-[var(--shadow-subtle)]">
               <Sun className="size-4.5" strokeWidth={1.75} />
             </span>
             <div>
@@ -74,9 +74,9 @@ export function TodayPanel({
 
   return (
     <Card className="overflow-hidden border-brand-200/80">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-brand-100 bg-gradient-to-r from-brand-50 to-white px-5 py-3.5">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-brand-100 bg-gradient-to-r from-brand-50 to-surface px-5 py-3.5">
         <div className="flex items-center gap-2.5">
-          <span className="flex size-8 items-center justify-center rounded-lg bg-brand-600 text-white">
+          <span className="flex size-8 items-center justify-center rounded-lg bg-brand-600 text-[var(--color-on-brand)]">
             <Sun className="size-4" strokeWidth={2} />
           </span>
           <div>
@@ -125,9 +125,9 @@ export function TodayPanel({
                   className={cn(
                     'tabular flex size-7 shrink-0 items-center justify-center rounded-lg text-[11px] font-semibold',
                     completed
-                      ? 'bg-[var(--color-positive-soft)] text-[color-mix(in_oklch,var(--color-positive),black_30%)]'
+                      ? 'bg-[var(--color-positive-soft)] text-[var(--color-positive-text)]'
                       : isNext
-                        ? 'bg-accent-600 text-white'
+                        ? 'bg-accent-600 text-[var(--color-on-brand)]'
                         : 'bg-ink-100 text-ink-500',
                   )}
                 >

@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { ThemeToggle } from '@/components/theme/theme-toggle';
 import {
   CalendarDays,
   ClipboardList,
@@ -28,7 +29,7 @@ export function Sidebar({ userName, company }: { userName: string; company: stri
   const pathname = usePathname();
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-ink-200 bg-white lg:flex">
+    <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-ink-200 bg-surface lg:flex">
       <div className="flex h-16 items-center px-5">
         <Link href="/dashboard" className="transition-opacity hover:opacity-80">
           <Logo />
@@ -61,7 +62,7 @@ export function Sidebar({ userName, company }: { userName: string; company: stri
         })}
       </nav>
 
-      <div className="border-t border-ink-200 p-3">
+      <div className="space-y-2 border-t border-ink-200 p-3">
         <div className="flex items-center gap-2.5 rounded-lg px-2 py-2">
           <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-semibold text-brand-800">
             {initials(userName)}
@@ -71,6 +72,7 @@ export function Sidebar({ userName, company }: { userName: string; company: stri
             {company && <p className="truncate text-[11px] text-ink-400">{company}</p>}
           </div>
         </div>
+        <ThemeToggle className="w-full justify-center" />
       </div>
     </aside>
   );
@@ -84,7 +86,7 @@ export function MobileNav() {
   );
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-ink-200 bg-white/95 backdrop-blur-sm lg:hidden">
+    <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-ink-200 bg-surface/95 backdrop-blur-sm lg:hidden">
       <div className="grid grid-cols-4 pb-[env(safe-area-inset-bottom)]">
         {items.map((item) => {
           const active = pathname === item.href || pathname.startsWith(`${item.href}/`);

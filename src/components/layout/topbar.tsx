@@ -47,7 +47,7 @@ export function Topbar({
             <span
               className={cn(
                 'hidden items-center gap-1.5 rounded-md bg-[var(--color-warning-soft)] px-2 py-1 text-[11px] font-medium sm:inline-flex',
-                'text-[color-mix(in_oklch,var(--color-warning),black_42%)]',
+                'text-[var(--color-warning-text)]',
               )}
               title="Sem Google Routes API configurada, distancias e tempos sao estimativas geometricas calibradas."
             >

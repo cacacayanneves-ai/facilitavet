@@ -106,7 +106,7 @@ export function MapWorkspace({
                   className={cn(
                     'tabular flex size-8 shrink-0 items-center justify-center rounded-lg text-xs font-semibold',
                     item.date === selectedDate && !showAllRoutes
-                      ? 'bg-brand-600 text-white'
+                      ? 'bg-brand-600 text-[var(--color-on-brand)]'
                       : 'bg-ink-100 text-ink-600',
                   )}
                 >

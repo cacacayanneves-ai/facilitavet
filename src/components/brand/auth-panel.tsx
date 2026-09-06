@@ -7,7 +7,7 @@
  */
 export function AuthBrandPanel() {
   return (
-    <div className="relative hidden overflow-hidden bg-brand-900 lg:block">
+    <div className="relative hidden overflow-hidden bg-[var(--color-brand-panel)] lg:block">
       <div className="absolute inset-0 opacity-[0.14]">
         <svg className="size-full" viewBox="0 0 600 700" fill="none" preserveAspectRatio="xMidYMid slice">
           <defs>
@@ -37,9 +37,9 @@ export function AuthBrandPanel() {
           <p className="text-3xl font-semibold leading-tight tracking-tight text-white">
             Você cuida das visitas.
             <br />
-            <span className="text-brand-200">A gente facilita o caminho.</span>
+            <span className="text-[var(--color-brand-panel-soft)]">A gente facilita o caminho.</span>
           </p>
-          <p className="mt-6 text-sm leading-relaxed text-brand-100/80">
+          <p className="mt-6 text-sm leading-relaxed text-[var(--color-brand-panel-muted)]">
             O Facilita Vet analisa sua carteira, respeita as regras de categoria, distribui as
             visitas pelos dias úteis e monta rotas que concentram cada dia numa região, em vez de
             atravessar a cidade cinco vezes.
@@ -54,7 +54,7 @@ export function AuthBrandPanel() {
           ].map((item) => (
             <div key={item.label}>
               <dt className="text-sm font-semibold text-white">{item.value}</dt>
-              <dd className="mt-0.5 text-[11px] leading-snug text-brand-200/70">{item.label}</dd>
+              <dd className="mt-0.5 text-[11px] leading-snug text-[var(--color-brand-panel-muted)]">{item.label}</dd>
             </div>
           ))}
         </dl>

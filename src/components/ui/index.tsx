@@ -20,7 +20,7 @@ export function Card({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
       className={cn(
-        'rounded-[var(--radius-card)] border border-ink-200/70 bg-white shadow-[var(--shadow-card)]',
+        'rounded-[var(--radius-card)] border border-ink-200/70 bg-surface shadow-[var(--shadow-card)]',
         className,
       )}
       {...props}
@@ -57,14 +57,14 @@ type ButtonSize = 'sm' | 'md' | 'lg' | 'icon';
 
 const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
   primary:
-    'bg-brand-700 text-white shadow-[var(--shadow-subtle)] hover:bg-brand-800 active:bg-brand-900 disabled:bg-ink-300',
+    'bg-brand-700 text-[var(--color-on-brand)] shadow-[var(--shadow-subtle)] hover:bg-brand-800 active:bg-brand-900 disabled:bg-ink-300',
   accent:
-    'bg-accent-600 text-white shadow-[var(--shadow-subtle)] hover:bg-accent-700 active:brightness-95 disabled:bg-ink-300',
+    'bg-accent-600 text-[var(--color-on-brand)] shadow-[var(--shadow-subtle)] hover:bg-accent-700 active:brightness-95 disabled:bg-ink-300',
   secondary: 'bg-ink-100 text-ink-800 hover:bg-ink-200 active:bg-ink-300 disabled:text-ink-400',
   outline:
-    'border border-ink-300 bg-white text-ink-700 hover:bg-ink-50 hover:border-ink-400 active:bg-ink-100 disabled:text-ink-400',
+    'border border-ink-300 bg-surface text-ink-700 hover:bg-ink-50 hover:border-ink-400 active:bg-ink-100 disabled:text-ink-400',
   ghost: 'text-ink-600 hover:bg-ink-100 hover:text-ink-900 active:bg-ink-200',
-  danger: 'bg-danger text-white hover:brightness-95 active:brightness-90',
+  danger: 'bg-danger text-[var(--color-on-brand)] hover:brightness-95 active:brightness-90',
 };
 
 const BUTTON_SIZES: Record<ButtonSize, string> = {
@@ -128,13 +128,13 @@ type BadgeTone = 'neutral' | 'brand' | 'positive' | 'warning' | 'danger' | 'info
 const BADGE_TONES: Record<BadgeTone, string> = {
   neutral: 'bg-ink-100 text-ink-600 ring-ink-200',
   brand: 'bg-brand-50 text-brand-800 ring-brand-200',
-  positive: 'bg-[var(--color-positive-soft)] text-[color-mix(in_oklch,var(--color-positive),black_25%)] ring-[color-mix(in_oklch,var(--color-positive),white_60%)]',
-  warning: 'bg-[var(--color-warning-soft)] text-[color-mix(in_oklch,var(--color-warning),black_35%)] ring-[color-mix(in_oklch,var(--color-warning),white_55%)]',
-  danger: 'bg-[var(--color-danger-soft)] text-[color-mix(in_oklch,var(--color-danger),black_15%)] ring-[color-mix(in_oklch,var(--color-danger),white_65%)]',
-  info: 'bg-[var(--color-info-soft)] text-[color-mix(in_oklch,var(--color-info),black_25%)] ring-[color-mix(in_oklch,var(--color-info),white_60%)]',
+  positive: 'bg-[var(--color-positive-soft)] text-[var(--color-positive-text)] ring-[var(--color-positive-line)]',
+  warning: 'bg-[var(--color-warning-soft)] text-[var(--color-warning-text)] ring-[var(--color-warning-line)]',
+  danger: 'bg-[var(--color-danger-soft)] text-[var(--color-danger-text)] ring-[var(--color-danger-line)]',
+  info: 'bg-[var(--color-info-soft)] text-[var(--color-info-text)] ring-[var(--color-info-line)]',
   cat1: 'bg-brand-50 text-brand-800 ring-brand-200',
-  cat2: 'bg-[var(--color-info-soft)] text-[color-mix(in_oklch,var(--color-cat2),black_25%)] ring-[color-mix(in_oklch,var(--color-cat2),white_65%)]',
-  cat3: 'bg-[color-mix(in_oklch,var(--color-cat3),white_92%)] text-[color-mix(in_oklch,var(--color-cat3),black_25%)] ring-[color-mix(in_oklch,var(--color-cat3),white_70%)]',
+  cat2: 'bg-[var(--color-info-soft)] text-[var(--color-info-text)] ring-[var(--color-info-line)]',
+  cat3: 'bg-[var(--color-cat3-soft)] text-[var(--color-cat3-text)] ring-[var(--color-cat3-line)]',
 };
 
 export function Badge({
@@ -172,7 +172,7 @@ export const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<'in
       <input
         ref={ref}
         className={cn(
-          'h-9.5 w-full rounded-lg border border-ink-300 bg-white px-3 text-sm text-ink-900',
+          'h-9.5 w-full rounded-lg border border-ink-300 bg-surface px-3 text-sm text-ink-900',
           'placeholder:text-ink-400 transition-colors',
           'hover:border-ink-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20',
           'disabled:bg-ink-100 disabled:text-ink-500',
@@ -201,7 +201,7 @@ export const PasswordInput = React.forwardRef<
         ref={ref}
         type={visible ? 'text' : 'password'}
         className={cn(
-          'h-9.5 w-full rounded-lg border border-ink-300 bg-white pl-3 pr-10 text-sm text-ink-900',
+          'h-9.5 w-full rounded-lg border border-ink-300 bg-surface pl-3 pr-10 text-sm text-ink-900',
           'placeholder:text-ink-400 transition-colors',
           'hover:border-ink-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20',
           'disabled:bg-ink-100 disabled:text-ink-500',
@@ -229,7 +229,7 @@ export const Select = React.forwardRef<HTMLSelectElement, React.ComponentProps<'
       <select
         ref={ref}
         className={cn(
-          'h-9.5 w-full appearance-none rounded-lg border border-ink-300 bg-white px-3 pr-8 text-sm text-ink-900',
+          'h-9.5 w-full appearance-none rounded-lg border border-ink-300 bg-surface px-3 pr-8 text-sm text-ink-900',
           'bg-[url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 20 20\'%3E%3Cpath stroke=\'%236b7280\' stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'1.5\' d=\'m6 8 4 4 4-4\'/%3E%3C/svg%3E")] bg-[length:1.25rem] bg-[position:right_0.5rem_center] bg-no-repeat',
           'transition-colors hover:border-ink-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20',
           className,
@@ -248,7 +248,7 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, React.ComponentPro
       <textarea
         ref={ref}
         className={cn(
-          'w-full rounded-lg border border-ink-300 bg-white px-3 py-2 text-sm text-ink-900',
+          'w-full rounded-lg border border-ink-300 bg-surface px-3 py-2 text-sm text-ink-900',
           'placeholder:text-ink-400 transition-colors',
           'hover:border-ink-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20',
           className,
@@ -406,7 +406,7 @@ export function Dialog({
         aria-modal="true"
         aria-label={title}
         className={cn(
-          'relative z-10 max-h-[90vh] w-full overflow-hidden rounded-t-2xl bg-white shadow-[var(--shadow-float)] sm:rounded-2xl',
+          'relative z-10 max-h-[90vh] w-full overflow-hidden rounded-t-2xl bg-surface shadow-[var(--shadow-float)] sm:rounded-2xl',
           'animate-[rise_0.28s_cubic-bezier(0.16,1,0.3,1)]',
           widths[size],
         )}
@@ -476,13 +476,13 @@ export function Alert({
   action?: React.ReactNode;
 }) {
   const tones = {
-    info: 'bg-[var(--color-info-soft)] border-[color-mix(in_oklch,var(--color-info),white_70%)] text-[color-mix(in_oklch,var(--color-info),black_35%)]',
+    info: 'bg-[var(--color-info-soft)] border-[var(--color-info-line)] text-[var(--color-info-text)]',
     warning:
-      'bg-[var(--color-warning-soft)] border-[color-mix(in_oklch,var(--color-warning),white_62%)] text-[color-mix(in_oklch,var(--color-warning),black_42%)]',
+      'bg-[var(--color-warning-soft)] border-[var(--color-warning-line)] text-[var(--color-warning-text)]',
     danger:
-      'bg-[var(--color-danger-soft)] border-[color-mix(in_oklch,var(--color-danger),white_72%)] text-[color-mix(in_oklch,var(--color-danger),black_18%)]',
+      'bg-[var(--color-danger-soft)] border-[var(--color-danger-line)] text-[var(--color-danger-text)]',
     positive:
-      'bg-[var(--color-positive-soft)] border-[color-mix(in_oklch,var(--color-positive),white_68%)] text-[color-mix(in_oklch,var(--color-positive),black_30%)]',
+      'bg-[var(--color-positive-soft)] border-[var(--color-positive-line)] text-[var(--color-positive-text)]',
   };
   return (
     <div className={cn('rounded-xl border px-4 py-3 text-xs leading-relaxed', tones[tone], className)}>
@@ -523,7 +523,7 @@ export function Tabs({
           className={cn(
             'shrink-0 rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-150',
             active === tab.id
-              ? 'bg-white text-ink-900 shadow-[var(--shadow-subtle)]'
+              ? 'bg-surface text-ink-900 shadow-[var(--shadow-subtle)]'
               : 'text-ink-500 hover:text-ink-800',
           )}
         >
@@ -547,7 +547,7 @@ export function Tooltip({ label, children }: { label: string; children: React.Re
       {children}
       <span
         role="tooltip"
-        className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-ink-900 px-2 py-1 text-[11px] font-medium text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover/tt:opacity-100"
+        className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-ink-900 px-2 py-1 text-[11px] font-medium text-ink-50 opacity-0 shadow-lg transition-opacity duration-150 group-hover/tt:opacity-100"
       >
         {label}
       </span>

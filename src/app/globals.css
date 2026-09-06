@@ -45,20 +45,52 @@
   --color-ink-900: oklch(0.212 0.009 172);
   --color-ink-950: oklch(0.146 0.008 172);
 
-  /* Semanticos */
+  /* Superficie elevada: cartao, campo, painel. Separada do fundo da pagina
+     porque no tema escuro "branco" deixa de ser a resposta certa. */
+  --color-surface: oklch(1 0 0);
+
+  /* Texto sobre preenchimento colorido (botao, chip cheio, marcador).
+     No claro o preenchimento e escuro e o texto e branco; no escuro a logica
+     se inverte: o preenchimento clareia para saltar do fundo e o texto
+     escurece. Por isso e token, e nao `text-white` fixo. */
+  --color-on-brand: oklch(1 0 0);
+
+  /* Painel de marca das telas de acesso: escuro nos DOIS temas, por design.
+     Por isso o texto dele tambem sai da escala normal — se seguisse os tokens
+     de marca, inverteria junto com o tema e sumiria sobre o proprio fundo. */
+  --color-brand-panel: oklch(0.318 0.056 172);
+  --color-brand-panel-soft: oklch(0.885 0.079 172);
+  --color-brand-panel-muted: oklch(0.800 0.055 172);
+
+  /* Semanticos.
+     Cada tom tem tres papeis: a cor cheia (ponto, icone), o fundo suave e o
+     texto legivel sobre esse fundo. O texto e a borda sao tokens em vez de
+     color-mix na classe porque o mesmo calculo nao serve nos dois temas:
+     escurecer a cor funciona sobre fundo claro e some sobre fundo escuro. */
   --color-positive: oklch(0.648 0.145 152);
   --color-positive-soft: oklch(0.945 0.045 152);
+  --color-positive-text: oklch(0.470 0.105 152);
+  --color-positive-line: oklch(0.873 0.052 152);
   --color-warning: oklch(0.762 0.145 78);
   --color-warning-soft: oklch(0.960 0.048 84);
+  --color-warning-text: oklch(0.470 0.089 78);
+  --color-warning-line: oklch(0.901 0.060 78);
   --color-danger: oklch(0.605 0.196 22);
   --color-danger-soft: oklch(0.950 0.036 22);
+  --color-danger-text: oklch(0.505 0.164 22);
+  --color-danger-line: oklch(0.875 0.062 22);
   --color-info: oklch(0.615 0.132 245);
   --color-info-soft: oklch(0.950 0.032 245);
+  --color-info-text: oklch(0.430 0.092 245);
+  --color-info-line: oklch(0.865 0.046 245);
 
   /* Categorias comerciais — cores estaveis em todo o produto */
   --color-cat1: oklch(0.545 0.108 172);
   --color-cat2: oklch(0.615 0.132 245);
   --color-cat3: oklch(0.640 0.155 310);
+  --color-cat3-soft: oklch(0.971 0.012 310);
+  --color-cat3-text: oklch(0.480 0.116 310);
+  --color-cat3-line: oklch(0.892 0.047 310);
 
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
     'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
@@ -74,6 +106,202 @@
   --animate-rise: rise 0.32s cubic-bezier(0.16, 1, 0.3, 1);
   --animate-fade: fade 0.24s ease-out;
   --animate-check: check 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ==========================================================================
+   TEMA ESCURO
+
+   A escala `ink` e espelhada em vez de duplicada: `ink-50` continua sendo "o
+   fundo" e `ink-900` continua sendo "o texto", so que trocam de luminosidade.
+   Assim nenhuma classe da aplicacao precisa de variante `dark:` — a interface
+   inteira acompanha a redefinicao dos tokens.
+
+   O espelho nao e literal: no escuro a faixa de luminancia util e mais curta,
+   entao os tons de fundo ficam mais proximos entre si e os de texto mais
+   afastados, senao as bordas somem e o texto vira brilho puro.
+
+   Os valores ficam definidos UMA vez aqui, como `--dark-*`, porque precisam
+   ser aplicados em duas situacoes distintas: escolha explicita do usuario
+   (`data-theme`) e preferencia do sistema (media query). Duplicar os valores
+   nos dois seletores criaria a chance de ajustar um tom e esquecer o outro.
+   ========================================================================== */
+:root {
+  --dark-color-ink-50: oklch(0.175 0.008 172);
+  --dark-color-ink-100: oklch(0.215 0.008 172);
+  --dark-color-ink-200: oklch(0.272 0.009 172);
+  --dark-color-ink-300: oklch(0.335 0.010 172);
+  --dark-color-ink-400: oklch(0.520 0.012 172);
+  --dark-color-ink-500: oklch(0.640 0.012 172);
+  --dark-color-ink-600: oklch(0.730 0.010 172);
+  --dark-color-ink-700: oklch(0.808 0.008 172);
+  --dark-color-ink-800: oklch(0.888 0.006 172);
+  --dark-color-ink-900: oklch(0.945 0.004 172);
+  --dark-color-ink-950: oklch(0.980 0.003 172);
+  --dark-color-surface: oklch(0.228 0.009 172);
+  --dark-color-on-brand: oklch(0.185 0.035 172);
+  --dark-color-brand-50: oklch(0.252 0.030 172);
+  --dark-color-brand-100: oklch(0.295 0.042 172);
+  --dark-color-brand-200: oklch(0.352 0.056 172);
+  --dark-color-brand-300: oklch(0.435 0.072 172);
+  --dark-color-brand-400: oklch(0.560 0.098 172);
+  --dark-color-brand-500: oklch(0.652 0.116 172);
+  --dark-color-brand-600: oklch(0.745 0.115 172);
+  --dark-color-brand-700: oklch(0.800 0.105 172);
+  --dark-color-brand-800: oklch(0.730 0.115 172);
+  --dark-color-brand-900: oklch(0.670 0.110 172);
+  --dark-color-brand-950: oklch(0.952 0.036 172);
+  --dark-color-accent-50: oklch(0.262 0.038 84);
+  --dark-color-accent-100: oklch(0.312 0.055 84);
+  --dark-color-accent-300: oklch(0.470 0.098 78);
+  --dark-color-accent-600: oklch(0.790 0.140 68);
+  --dark-color-accent-700: oklch(0.828 0.128 62);
+  --dark-color-positive: oklch(0.735 0.150 152);
+  --dark-color-positive-soft: oklch(0.278 0.052 152);
+  --dark-color-positive-text: oklch(0.848 0.122 152);
+  --dark-color-positive-line: oklch(0.402 0.075 152);
+  --dark-color-warning: oklch(0.812 0.148 82);
+  --dark-color-warning-soft: oklch(0.288 0.055 82);
+  --dark-color-warning-text: oklch(0.872 0.128 84);
+  --dark-color-warning-line: oklch(0.422 0.080 80);
+  --dark-color-danger: oklch(0.720 0.170 22);
+  --dark-color-danger-soft: oklch(0.288 0.066 22);
+  --dark-color-danger-text: oklch(0.818 0.132 22);
+  --dark-color-danger-line: oklch(0.422 0.100 22);
+  --dark-color-info: oklch(0.702 0.134 245);
+  --dark-color-info-soft: oklch(0.282 0.052 245);
+  --dark-color-info-text: oklch(0.832 0.098 245);
+  --dark-color-info-line: oklch(0.418 0.078 245);
+  --dark-color-cat1: oklch(0.706 0.118 172);
+  --dark-color-cat2: oklch(0.702 0.134 245);
+  --dark-color-cat3: oklch(0.735 0.148 310);
+  --dark-color-cat3-soft: oklch(0.288 0.060 310);
+  --dark-color-cat3-text: oklch(0.845 0.110 310);
+  --dark-color-cat3-line: oklch(0.432 0.085 310);
+  --dark-shadow-subtle: 0 1px 2px 0 rgb(0 0 0 / 0.28), 0 1px 3px 0 rgb(0 0 0 / 0.22);
+  --dark-shadow-card: 0 1px 2px rgb(0 0 0 / 0.30), 0 4px 12px -2px rgb(0 0 0 / 0.34);
+  --dark-shadow-float: 0 2px 4px rgb(0 0 0 / 0.32), 0 12px 32px -8px rgb(0 0 0 / 0.52);
+}
+
+/* Escolha explicita do usuario. */
+[data-theme='dark'] {
+    --color-ink-50: var(--dark-color-ink-50);
+    --color-ink-100: var(--dark-color-ink-100);
+    --color-ink-200: var(--dark-color-ink-200);
+    --color-ink-300: var(--dark-color-ink-300);
+    --color-ink-400: var(--dark-color-ink-400);
+    --color-ink-500: var(--dark-color-ink-500);
+    --color-ink-600: var(--dark-color-ink-600);
+    --color-ink-700: var(--dark-color-ink-700);
+    --color-ink-800: var(--dark-color-ink-800);
+    --color-ink-900: var(--dark-color-ink-900);
+    --color-ink-950: var(--dark-color-ink-950);
+    --color-surface: var(--dark-color-surface);
+    --color-on-brand: var(--dark-color-on-brand);
+    --color-brand-50: var(--dark-color-brand-50);
+    --color-brand-100: var(--dark-color-brand-100);
+    --color-brand-200: var(--dark-color-brand-200);
+    --color-brand-300: var(--dark-color-brand-300);
+    --color-brand-400: var(--dark-color-brand-400);
+    --color-brand-500: var(--dark-color-brand-500);
+    --color-brand-600: var(--dark-color-brand-600);
+    --color-brand-700: var(--dark-color-brand-700);
+    --color-brand-800: var(--dark-color-brand-800);
+    --color-brand-900: var(--dark-color-brand-900);
+    --color-brand-950: var(--dark-color-brand-950);
+    --color-accent-50: var(--dark-color-accent-50);
+    --color-accent-100: var(--dark-color-accent-100);
+    --color-accent-300: var(--dark-color-accent-300);
+    --color-accent-600: var(--dark-color-accent-600);
+    --color-accent-700: var(--dark-color-accent-700);
+    --color-positive: var(--dark-color-positive);
+    --color-positive-soft: var(--dark-color-positive-soft);
+    --color-positive-text: var(--dark-color-positive-text);
+    --color-positive-line: var(--dark-color-positive-line);
+    --color-warning: var(--dark-color-warning);
+    --color-warning-soft: var(--dark-color-warning-soft);
+    --color-warning-text: var(--dark-color-warning-text);
+    --color-warning-line: var(--dark-color-warning-line);
+    --color-danger: var(--dark-color-danger);
+    --color-danger-soft: var(--dark-color-danger-soft);
+    --color-danger-text: var(--dark-color-danger-text);
+    --color-danger-line: var(--dark-color-danger-line);
+    --color-info: var(--dark-color-info);
+    --color-info-soft: var(--dark-color-info-soft);
+    --color-info-text: var(--dark-color-info-text);
+    --color-info-line: var(--dark-color-info-line);
+    --color-cat1: var(--dark-color-cat1);
+    --color-cat2: var(--dark-color-cat2);
+    --color-cat3: var(--dark-color-cat3);
+    --color-cat3-soft: var(--dark-color-cat3-soft);
+    --color-cat3-text: var(--dark-color-cat3-text);
+    --color-cat3-line: var(--dark-color-cat3-line);
+    --shadow-subtle: var(--dark-shadow-subtle);
+    --shadow-card: var(--dark-shadow-card);
+    --shadow-float: var(--dark-shadow-float);
+    color-scheme: dark;
+}
+
+/* Sem escolha explicita, segue o sistema. O `:not([data-theme='light'])`
+   garante que quem escolheu claro continue no claro mesmo com o sistema
+   no escuro. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --color-ink-50: var(--dark-color-ink-50);
+    --color-ink-100: var(--dark-color-ink-100);
+    --color-ink-200: var(--dark-color-ink-200);
+    --color-ink-300: var(--dark-color-ink-300);
+    --color-ink-400: var(--dark-color-ink-400);
+    --color-ink-500: var(--dark-color-ink-500);
+    --color-ink-600: var(--dark-color-ink-600);
+    --color-ink-700: var(--dark-color-ink-700);
+    --color-ink-800: var(--dark-color-ink-800);
+    --color-ink-900: var(--dark-color-ink-900);
+    --color-ink-950: var(--dark-color-ink-950);
+    --color-surface: var(--dark-color-surface);
+    --color-on-brand: var(--dark-color-on-brand);
+    --color-brand-50: var(--dark-color-brand-50);
+    --color-brand-100: var(--dark-color-brand-100);
+    --color-brand-200: var(--dark-color-brand-200);
+    --color-brand-300: var(--dark-color-brand-300);
+    --color-brand-400: var(--dark-color-brand-400);
+    --color-brand-500: var(--dark-color-brand-500);
+    --color-brand-600: var(--dark-color-brand-600);
+    --color-brand-700: var(--dark-color-brand-700);
+    --color-brand-800: var(--dark-color-brand-800);
+    --color-brand-900: var(--dark-color-brand-900);
+    --color-brand-950: var(--dark-color-brand-950);
+    --color-accent-50: var(--dark-color-accent-50);
+    --color-accent-100: var(--dark-color-accent-100);
+    --color-accent-300: var(--dark-color-accent-300);
+    --color-accent-600: var(--dark-color-accent-600);
+    --color-accent-700: var(--dark-color-accent-700);
+    --color-positive: var(--dark-color-positive);
+    --color-positive-soft: var(--dark-color-positive-soft);
+    --color-positive-text: var(--dark-color-positive-text);
+    --color-positive-line: var(--dark-color-positive-line);
+    --color-warning: var(--dark-color-warning);
+    --color-warning-soft: var(--dark-color-warning-soft);
+    --color-warning-text: var(--dark-color-warning-text);
+    --color-warning-line: var(--dark-color-warning-line);
+    --color-danger: var(--dark-color-danger);
+    --color-danger-soft: var(--dark-color-danger-soft);
+    --color-danger-text: var(--dark-color-danger-text);
+    --color-danger-line: var(--dark-color-danger-line);
+    --color-info: var(--dark-color-info);
+    --color-info-soft: var(--dark-color-info-soft);
+    --color-info-text: var(--dark-color-info-text);
+    --color-info-line: var(--dark-color-info-line);
+    --color-cat1: var(--dark-color-cat1);
+    --color-cat2: var(--dark-color-cat2);
+    --color-cat3: var(--dark-color-cat3);
+    --color-cat3-soft: var(--dark-color-cat3-soft);
+    --color-cat3-text: var(--dark-color-cat3-text);
+    --color-cat3-line: var(--dark-color-cat3-line);
+    --shadow-subtle: var(--dark-shadow-subtle);
+    --shadow-card: var(--dark-shadow-card);
+    --shadow-float: var(--dark-shadow-float);
+    color-scheme: dark;
+  }
 }
 
 @keyframes rise {
@@ -156,12 +384,19 @@
     overflow: hidden;
     background: var(--color-ink-200);
   }
+  /* O brilho corre com a cor da superficie, e nao com branco fixo: no tema
+     escuro um rastro branco piscaria em vez de sugerir carregamento. */
   .skeleton::after {
     content: '';
     position: absolute;
     inset: 0;
     transform: translateX(-100%);
-    background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.6), transparent);
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in oklch, var(--color-surface) 70%, transparent),
+      transparent
+    );
     animation: shimmer 1.6s infinite;
   }
 }

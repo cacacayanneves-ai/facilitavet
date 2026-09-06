@@ -270,8 +270,8 @@ export function DayWorkspace({
                     className={cn(
                       'tabular flex size-7 shrink-0 items-center justify-center rounded-lg text-[11px] font-semibold',
                       completedStop
-                        ? 'bg-[var(--color-positive-soft)] text-[color-mix(in_oklch,var(--color-positive),black_30%)]'
-                        : 'bg-brand-600 text-white',
+                        ? 'bg-[var(--color-positive-soft)] text-[var(--color-positive-text)]'
+                        : 'bg-brand-600 text-[var(--color-on-brand)]',
                     )}
                   >
                     {completedStop ? <Check className="size-3.5" strokeWidth={3} /> : stop.sequence}

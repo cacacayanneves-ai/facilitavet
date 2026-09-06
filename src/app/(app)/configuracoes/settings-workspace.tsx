@@ -365,7 +365,7 @@ export function SettingsWorkspace(props: {
                     className={cn(
                       'flex size-10 items-center justify-center rounded-lg text-sm font-semibold transition-all',
                       settings.workDays.includes(day.value)
-                        ? 'bg-brand-600 text-white shadow-[var(--shadow-subtle)]'
+                        ? 'bg-brand-600 text-[var(--color-on-brand)] shadow-[var(--shadow-subtle)]'
                         : 'bg-ink-100 text-ink-400 hover:bg-ink-200',
                     )}
                   >
@@ -573,7 +573,7 @@ export function SettingsWorkspace(props: {
                   {forecast.map((item) => (
                     <span
                       key={`${item.year}-${item.month}`}
-                      className="rounded-md bg-white px-2 py-1 text-[11px] font-medium text-ink-600 shadow-[var(--shadow-subtle)]"
+                      className="rounded-md bg-surface px-2 py-1 text-[11px] font-medium text-ink-600 shadow-[var(--shadow-subtle)]"
                     >
                       <span className="capitalize">{monthName(item.month).slice(0, 3)}</span>{' '}
                       <span className="text-ink-900">
@@ -764,7 +764,7 @@ export function SettingsWorkspace(props: {
                         className={cn(
                           'flex size-9 items-center justify-center rounded-lg text-xs font-semibold transition-all',
                           settings.whatsappDays.includes(day.value)
-                            ? 'bg-brand-600 text-white'
+                            ? 'bg-brand-600 text-[var(--color-on-brand)]'
                             : 'bg-ink-100 text-ink-400 hover:bg-ink-200',
                         )}
                       >

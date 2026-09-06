@@ -304,9 +304,9 @@ function Steps({ current }: { current: Step }) {
             className={cn(
               'tabular flex size-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold transition-colors',
               index < currentIndex
-                ? 'bg-[var(--color-positive)] text-white'
+                ? 'bg-[var(--color-positive)] text-[var(--color-on-brand)]'
                 : index === currentIndex
-                  ? 'bg-brand-600 text-white'
+                  ? 'bg-brand-600 text-[var(--color-on-brand)]'
                   : 'bg-ink-200 text-ink-500',
             )}
           >
@@ -471,7 +471,7 @@ function ReviewStep({
                             className={cn(
                               'flex items-start gap-1.5 text-[11px]',
                               issue.level === 'error'
-                                ? 'text-[color-mix(in_oklch,var(--color-danger),black_10%)]'
+                                ? 'text-[var(--color-danger-text)]'
                                 : 'text-ink-500',
                             )}
                           >
@@ -480,7 +480,7 @@ function ReviewStep({
                           </p>
                         ))}
                         {row.latitude === null && row.geocodeStatus === 'FAILED' && (
-                          <p className="flex items-start gap-1.5 text-[11px] text-[color-mix(in_oklch,var(--color-warning),black_38%)]">
+                          <p className="flex items-start gap-1.5 text-[11px] text-[var(--color-warning-text)]">
                             <MapPin className="mt-px size-3 shrink-0" />
                             {row.geocodeLabel ?? 'Não foi possível localizar.'}
                           </p>
@@ -506,7 +506,7 @@ function ReviewStep({
                                 }
                                 className={cn(
                                   'block w-full truncate rounded px-2 py-1 text-left text-[11px] transition-colors',
-                                  chosen ? 'bg-brand-100 font-medium text-brand-900' : 'text-ink-600 hover:bg-white',
+                                  chosen ? 'bg-brand-100 font-medium text-brand-900' : 'text-ink-600 hover:bg-surface',
                                 )}
                               >
                                 {chosen && '✓ '}{candidate.label}
@@ -595,7 +595,7 @@ function SummaryTile({
           className={cn(
             'tabular mt-0.5 text-2xl font-semibold tracking-tight',
             tone === 'positive' && 'text-[var(--color-positive)]',
-            tone === 'warning' && 'text-[color-mix(in_oklch,var(--color-warning),black_25%)]',
+            tone === 'warning' && 'text-[var(--color-warning-text)]',
             tone === 'danger' && 'text-[var(--color-danger)]',
             !tone && 'text-ink-900',
           )}

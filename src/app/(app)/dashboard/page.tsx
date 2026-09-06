@@ -38,7 +38,7 @@ export default async function DashboardPage() {
         actions={
           <Link
             href="/planejamento"
-            className="hidden h-8 items-center rounded-lg border border-ink-300 bg-white px-3 text-xs font-medium text-ink-700 transition-colors hover:border-ink-400 hover:bg-ink-50 sm:inline-flex"
+            className="hidden h-8 items-center rounded-lg border border-ink-300 bg-surface px-3 text-xs font-medium text-ink-700 transition-colors hover:border-ink-400 hover:bg-ink-50 sm:inline-flex"
           >
             Planejar mês
           </Link>
@@ -235,7 +235,7 @@ export default async function DashboardPage() {
                       href={`/agenda/${key}`}
                       className="group -mx-2 flex items-center gap-3 rounded-lg px-2 py-2.5 transition-colors hover:bg-ink-100"
                     >
-                      <div className="flex size-10 shrink-0 flex-col items-center justify-center rounded-lg bg-ink-100 group-hover:bg-white">
+                      <div className="flex size-10 shrink-0 flex-col items-center justify-center rounded-lg bg-ink-100 group-hover:bg-surface">
                         <span className="tabular text-sm font-semibold leading-none text-ink-800">
                           {route.date.getUTCDate()}
                         </span>

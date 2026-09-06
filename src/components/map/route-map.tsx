@@ -86,7 +86,7 @@ export function RouteMap({
   return (
     <div
       className={cn(
-        'relative overflow-hidden rounded-[var(--radius-card)] border border-ink-200 bg-[color-mix(in_oklch,var(--color-brand-50),white_55%)]',
+        'relative overflow-hidden rounded-[var(--radius-card)] border border-ink-200 bg-[var(--color-brand-50)]',
         className,
       )}
       style={{ height }}
@@ -202,7 +202,7 @@ export function RouteMap({
             className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full animate-[fade_0.12s_ease-out]"
             style={{ left: `${(x / width) * 100}%`, top: `calc(${(y / viewHeight) * 100}% - 14px)` }}
           >
-            <div className="whitespace-nowrap rounded-lg bg-ink-900 px-2.5 py-1.5 text-[11px] text-white shadow-lg">
+            <div className="whitespace-nowrap rounded-lg bg-ink-900 px-2.5 py-1.5 text-[11px] text-ink-50 shadow-lg">
               <span className="font-semibold">{stop.label}</span>
               {stop.sublabel && <span className="ml-1.5 text-ink-300">{stop.sublabel}</span>}
             </div>
@@ -236,7 +236,7 @@ function AnchorMarker({
 
 function MapLegend({ hasContext, hasOrigin }: { hasContext: boolean; hasOrigin: boolean }) {
   return (
-    <div className="absolute bottom-3 left-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg bg-white/90 px-2.5 py-1.5 text-[10px] text-ink-500 shadow-[var(--shadow-subtle)] backdrop-blur-sm">
+    <div className="absolute bottom-3 left-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg bg-surface/90 px-2.5 py-1.5 text-[10px] text-ink-500 shadow-[var(--shadow-subtle)] backdrop-blur-sm">
       {hasOrigin && (
         <span className="inline-flex items-center gap-1.5">
           <span className="size-2 rounded-full border-2 border-brand-800 bg-white" /> Origem
