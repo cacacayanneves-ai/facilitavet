@@ -1,0 +1,510 @@
+// Facilita Vet — modelo de dados
+// "Voce cuida das visitas. A gente facilita o caminho."
+//
+// Notas de arquitetura:
+// - Toda entidade de negocio carrega organizationId. O MVP opera com uma unica
+//   organizacao, mas o particionamento ja existe para multi-tenant sem migracao
+//   destrutiva no futuro.
+// - Campos `metadata Json` funcionam como ponto de extensao para o CRM futuro
+//   (produtos, oportunidades, potencial de venda) sem alterar o schema agora.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum UserRole {
+  OWNER
+  MANAGER
+  REP
+}
+
+enum Category {
+  CAT1
+  CAT2
+  CAT3
+}
+
+enum GeocodeStatus {
+  PENDING
+  RESOLVED
+  AMBIGUOUS
+  FAILED
+  MANUAL
+}
+
+enum PlanStatus {
+  DRAFT
+  GENERATING
+  READY
+  ARCHIVED
+  FAILED
+}
+
+enum VisitStatus {
+  PLANNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  RESCHEDULED
+}
+
+enum AnchorType {
+  HOME
+  OFFICE
+  LAST_VISIT
+  MANUAL
+  NONE
+}
+
+enum MessageChannel {
+  WHATSAPP
+  EMAIL
+}
+
+enum MessageStatus {
+  QUEUED
+  SENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
+enum ImportStatus {
+  UPLOADED
+  MAPPED
+  VALIDATED
+  GEOCODING
+  REVIEW
+  COMMITTED
+  DISCARDED
+}
+
+// ---------------------------------------------------------------------------
+// Tenancy e identidade
+// ---------------------------------------------------------------------------
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users         User[]
+  clinics       Clinic[]
+  holidays      Holiday[]
+  plans         MonthlyPlan[]
+  importBatches ImportBatch[]
+}
+
+model User {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  email          String   @unique
+  phone          String?
+  company        String?
+  passwordHash   String
+  role           UserRole @default(OWNER)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization  Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  settings      UserSettings?
+  visits        Visit[]
+  plans         MonthlyPlan[]
+  blockedDays   BlockedDay[]
+  messages      OutboxMessage[]
+  importBatches ImportBatch[]
+  planRuns      PlanRun[]
+
+  @@index([organizationId])
+}
+
+model UserSettings {
+  id     String @id @default(cuid())
+  userId String @unique
+
+  // Jornada
+  workDays      Int[]   @default([1, 2, 3, 4, 5]) // 0=domingo ... 6=sabado
+  workStartTime String  @default("08:00")
+  workEndTime   String  @default("18:00")
+  lunchStart    String? @default("12:00")
+  lunchEnd      String? @default("13:30")
+
+  // Duracao media de atendimento e folga entre visitas (minutos)
+  visitDurationMinutes Int @default(30)
+  bufferMinutes        Int @default(5)
+
+  // Origem / destino
+  originType           AnchorType @default(HOME)
+  originAddress        String?
+  originLatitude       Float?
+  originLongitude      Float?
+  destinationType      AnchorType @default(NONE)
+  destinationAddress   String?
+  destinationLatitude  Float?
+  destinationLongitude Float?
+
+  // Meta e limites
+  monthlyTarget   Int @default(100)
+  minVisitsPerDay Int @default(4)
+  maxVisitsPerDay Int @default(9)
+
+  // Regras comerciais (CategoryRuleSet serializado) e pesos do score
+  categoryRules Json
+  scoreWeights  Json
+
+  // Regiao para feriados
+  country String  @default("BR")
+  state   String? @default("SP")
+  city    String? @default("Sao Paulo")
+
+  // Notificacoes
+  whatsappEnabled         Boolean @default(true)
+  whatsappNumber          String?
+  whatsappTime            String  @default("08:00")
+  whatsappDays            Int[]   @default([1, 2, 3, 4, 5])
+  whatsappIncludeRoute    Boolean @default(true)
+  whatsappIncludeDistance Boolean @default(true)
+  whatsappIncludeTimes    Boolean @default(true)
+  whatsappIncludeMapLink  Boolean @default(true)
+
+  timezone  String   @default("America/Sao_Paulo")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ---------------------------------------------------------------------------
+// Carteira
+// ---------------------------------------------------------------------------
+
+model Clinic {
+  id             String  @id @default(cuid())
+  organizationId String
+  externalRef    String?
+
+  name         String
+  category     Category
+  address      String?
+  neighborhood String?
+  city         String?
+  state        String?
+  postalCode   String?
+  phone        String?
+  notes        String?
+
+  latitude         Float?
+  longitude        Float?
+  geocodeStatus    GeocodeStatus @default(PENDING)
+  geocodeLabel     String?
+  geocodePrecision String?
+  geocodedAt       DateTime?
+
+  active Boolean @default(true)
+
+  // Seams para o CRM/inteligencia futura (potencial, frequencia ideal, etc.)
+  priority Int  @default(0)
+  metadata Json @default("{}")
+
+  lastVisitedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  visits       Visit[]
+  routeStops   RouteStop[]
+
+  @@unique([organizationId, name, neighborhood])
+  @@index([organizationId, category, active])
+  @@index([organizationId, geocodeStatus])
+}
+
+// ---------------------------------------------------------------------------
+// Planejamento
+// ---------------------------------------------------------------------------
+
+model MonthlyPlan {
+  id             String     @id @default(cuid())
+  organizationId String
+  userId         String
+  year           Int
+  month          Int // 1-12
+  targetVisits   Int
+  status         PlanStatus @default(DRAFT)
+
+  // Categorias efetivamente exigidas neste mes (resultado do ciclo configurado)
+  requiredCategories Category[]
+
+  totalDistanceMeters  Int   @default(0)
+  totalDurationSeconds Int   @default(0)
+  averageScore         Float @default(0)
+
+  // Snapshot da entrada e das estatisticas da execucao do motor
+  inputSnapshot Json?
+  statistics    Json?
+
+  generatedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  routes       Route[]
+  visits       Visit[]
+  planRuns     PlanRun[]
+
+  @@unique([userId, year, month])
+  @@index([organizationId, year, month])
+}
+
+model Route {
+  id            String   @id @default(cuid())
+  monthlyPlanId String
+  date          DateTime @db.Date
+
+  originLabel          String?
+  originLatitude       Float?
+  originLongitude      Float?
+  destinationLabel     String?
+  destinationLatitude  Float?
+  destinationLongitude Float?
+
+  totalDistanceMeters  Int   @default(0)
+  totalDurationSeconds Int   @default(0)
+  score                Float @default(0)
+  scoreBreakdown       Json?
+
+  // Rotulo geografico legivel ("Zona Sul", "Vila Mariana +2")
+  regionLabel String?
+
+  // Analise contextual gerada pelo Claude (opcional, nunca fonte da verdade)
+  aiSummary String?
+
+  matrixProvider String? // qual MapsProvider gerou as metricas
+  estimatedAt    DateTime?
+  stale          Boolean   @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  monthlyPlan MonthlyPlan @relation(fields: [monthlyPlanId], references: [id], onDelete: Cascade)
+  stops       RouteStop[]
+
+  @@unique([monthlyPlanId, date])
+  @@index([date])
+}
+
+model RouteStop {
+  id       String  @id @default(cuid())
+  routeId  String
+  clinicId String
+  visitId  String? @unique
+
+  sequence                    Int
+  estimatedArrival            DateTime?
+  estimatedDeparture          DateTime?
+  distanceFromPreviousMeters  Int       @default(0)
+  durationFromPreviousSeconds Int       @default(0)
+
+  createdAt DateTime @default(now())
+
+  route  Route  @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  visit  Visit? @relation(fields: [visitId], references: [id], onDelete: SetNull)
+
+  @@unique([routeId, sequence])
+  @@index([clinicId])
+}
+
+model Visit {
+  id             String  @id @default(cuid())
+  organizationId String
+  userId         String
+  clinicId       String
+  monthlyPlanId  String?
+
+  date     DateTime    @db.Date
+  category Category
+  status   VisitStatus @default(PLANNED)
+  sequence Int         @default(0)
+
+  estimatedArrival DateTime?
+  completedAt      DateTime?
+  cancelledReason  String?
+  notes            String?
+
+  // Seam CRM: produtos apresentados, pedidos, follow-up
+  metadata Json @default("{}")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clinic      Clinic       @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  monthlyPlan MonthlyPlan? @relation(fields: [monthlyPlanId], references: [id], onDelete: SetNull)
+  routeStop   RouteStop?
+
+  @@index([userId, date])
+  @@index([clinicId, date])
+  @@index([organizationId, status])
+}
+
+// ---------------------------------------------------------------------------
+// Calendario
+// ---------------------------------------------------------------------------
+
+model Holiday {
+  id             String   @id @default(cuid())
+  organizationId String?
+  date           DateTime @db.Date
+  name           String
+  country        String   @default("BR")
+  state          String?
+  city           String?
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([date, country, state, city, name])
+  @@index([date])
+}
+
+model BlockedDay {
+  id     String   @id @default(cuid())
+  userId String
+  date   DateTime @db.Date
+  reason String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+}
+
+// ---------------------------------------------------------------------------
+// Cache de provedores externos (controle de custo)
+// ---------------------------------------------------------------------------
+
+model GeocodeCache {
+  id         String   @id @default(cuid())
+  queryHash  String   @unique
+  query      String
+  provider   String
+  latitude   Float?
+  longitude  Float?
+  label      String?
+  precision  String?
+  candidates Json?
+  hit        Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model TravelCache {
+  id              String   @id @default(cuid())
+  pairHash        String   @unique
+  provider        String
+  originLat       Float
+  originLng       Float
+  destLat         Float
+  destLng         Float
+  distanceMeters  Int
+  durationSeconds Int
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([provider])
+}
+
+// ---------------------------------------------------------------------------
+// Importacao de planilha
+// ---------------------------------------------------------------------------
+
+model ImportBatch {
+  id             String       @id @default(cuid())
+  organizationId String
+  userId         String
+  filename       String
+  status         ImportStatus @default(UPLOADED)
+
+  detectedColumns Json
+  columnMapping   Json?
+  rows            Json // linhas normalizadas + diagnostico por linha
+
+  totalRows     Int @default(0)
+  validRows     Int @default(0)
+  geocodedRows  Int @default(0)
+  duplicateRows Int @default(0)
+  errorRows     Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status])
+}
+
+// ---------------------------------------------------------------------------
+// Observabilidade e mensageria
+// ---------------------------------------------------------------------------
+
+model PlanRun {
+  id             String   @id @default(cuid())
+  executionId    String   @unique
+  userId         String
+  monthlyPlanId  String?
+  status         String   @default("RUNNING")
+  strategy       String?
+  durationMs     Int      @default(0)
+  mapsProvider   String?
+  claudeUsed     Boolean  @default(false)
+  matrixElements Int      @default(0)
+  cacheHits      Int      @default(0)
+  logs           Json?
+  error          String?
+  createdAt      DateTime @default(now())
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  monthlyPlan MonthlyPlan? @relation(fields: [monthlyPlanId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+}
+
+model OutboxMessage {
+  id      String         @id @default(cuid())
+  userId  String
+  channel MessageChannel @default(WHATSAPP)
+  status  MessageStatus  @default(QUEUED)
+
+  scheduledFor DateTime
+  sentAt       DateTime?
+  recipient    String
+  payload      Json
+  body         String
+  providerRef  String?
+  error        String?
+  attempts     Int       @default(0)
+
+  // Chave de idempotencia: um envio por usuario/dia/tipo
+  dedupeKey String @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, scheduledFor])
+}
