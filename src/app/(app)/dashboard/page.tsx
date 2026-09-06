@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ArrowRight, CalendarDays, Gauge, MapPin, Route as RouteIcon, TrendingDown } from 'lucide-react';
+import { ArrowRight, CalendarDays, Gauge, MapPin, Route as RouteIcon, TrendingDown, Upload } from 'lucide-react';
 import { requireUser } from '@/lib/auth';
 import { getDashboardData } from '@/lib/services/dashboard';
 import { Topbar } from '@/components/layout/topbar';
@@ -27,6 +27,7 @@ export default async function DashboardPage() {
   const planned = data.progress.planned;
   const target = data.progress.target || user.settings!.monthlyTarget;
   const planPercent = target > 0 ? Math.min(100, Math.round((planned / target) * 100)) : 0;
+  const totalClinics = Object.values(data.clinicsByCategory).reduce((a, b) => a + b, 0);
 
   return (
     <>
@@ -53,16 +54,38 @@ export default async function DashboardPage() {
           <p className="mt-1 text-sm text-ink-500">
             {data.plan
               ? <>Seu mês está <span className="font-medium text-ink-800">{planPercent}% planejado</span> — {planned} de {target} visitas distribuídas em {data.progress.plannedDays} dias.</>
-              : <>Sua carteira está pronta. Gere o roteiro de {monthName(data.month)} para começar.</>}
+              : totalClinics === 0
+                ? <>Comece importando sua carteira de clínicas — o roteiro vem em seguida.</>
+                : <>Sua carteira está pronta. Gere o roteiro de {monthName(data.month)} para começar.</>}
           </p>
         </section>
 
-        {!data.plan && (
+        {/* Carteira vazia (conta recem-criada) tem outro proximo passo: sem
+            clinicas nao ha o que roteirizar, entao o convite e importar. */}
+        {!data.plan && totalClinics === 0 && (
+          <Card>
+            <EmptyState
+              icon={<Upload className="size-5" strokeWidth={1.75} />}
+              title="Sua carteira ainda está vazia"
+              description="Importe a planilha com suas clínicas — nome, endereço, categoria e quantos veterinários cada uma tem. Você revisa tudo antes de confirmar."
+              action={
+                <Link href="/carteira/importar">
+                  <Button size="lg">
+                    Importar minha carteira
+                    <ArrowRight className="size-4" />
+                  </Button>
+                </Link>
+              }
+            />
+          </Card>
+        )}
+
+        {!data.plan && totalClinics > 0 && (
           <Card>
             <EmptyState
               icon={<RouteIcon className="size-5" strokeWidth={1.75} />}
               title={`${monthName(data.month)} ainda não foi planejado`}
-              description={`Você tem ${Object.values(data.clinicsByCategory).reduce((a, b) => a + b, 0)} clínicas na carteira e ${data.availableDays} dias úteis neste mês. O Facilita Vet monta a agenda inteira em segundos.`}
+              description={`Você tem ${totalClinics} clínicas na carteira e ${data.availableDays} dias úteis neste mês. O Facilita Vet monta a agenda inteira em segundos.`}
               action={
                 <Link href="/planejamento">
                   <Button size="lg">

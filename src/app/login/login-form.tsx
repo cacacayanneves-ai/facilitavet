@@ -2,8 +2,13 @@
 
 import { useRouter } from 'next/navigation';
 import * as React from 'react';
-import { Alert, Button, Field, Input } from '@/components/ui';
+import { Alert, Button, Field, Input, PasswordInput } from '@/components/ui';
 
+/**
+ * As credenciais de demonstracao so chegam preenchidas fora de producao
+ * (ver login/page.tsx): num site publico, um formulario pre-preenchido deixa
+ * a conta aberta para qualquer visitante.
+ */
 export function LoginForm({ demoEmail, demoPassword }: { demoEmail: string; demoPassword: string }) {
   const router = useRouter();
   const [email, setEmail] = React.useState(demoEmail);
@@ -48,8 +53,7 @@ export function LoginForm({ demoEmail, demoPassword }: { demoEmail: string; demo
       </Field>
 
       <Field label="Senha">
-        <Input
-          type="password"
+        <PasswordInput
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           autoComplete="current-password"
@@ -61,10 +65,12 @@ export function LoginForm({ demoEmail, demoPassword }: { demoEmail: string; demo
         Entrar
       </Button>
 
-      <p className="rounded-lg bg-ink-100 px-3 py-2.5 text-[11px] leading-relaxed text-ink-500">
-        <span className="font-medium text-ink-700">Conta de demonstração</span> já preenchida —
-        carteira com 130 clínicas e o mês planejado.
-      </p>
+      {demoPassword && (
+        <p className="rounded-lg bg-ink-100 px-3 py-2.5 text-[11px] leading-relaxed text-ink-500">
+          <span className="font-medium text-ink-700">Conta de demonstração</span> já preenchida —
+          ambiente de desenvolvimento.
+        </p>
+      )}
     </form>
   );
 }

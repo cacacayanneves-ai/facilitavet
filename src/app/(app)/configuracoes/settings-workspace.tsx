@@ -11,6 +11,7 @@ import {
   CardContent,
   Field,
   Input,
+  PasswordInput,
   Select,
   Switch,
   Tabs,
@@ -88,6 +89,62 @@ export function SettingsWorkspace(props: {
   const [saved, setSaved] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [notice, setNotice] = React.useState<string | null>(null);
+
+  // Dados de acesso tem formulario e botao proprios: a troca exige a senha
+  // atual e nao deve viajar junto com o "Salvar alteracoes" do resto.
+  const [account, setAccount] = React.useState({
+    email: props.profile.email,
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
+  const [accountSaving, setAccountSaving] = React.useState(false);
+  const [accountError, setAccountError] = React.useState<string | null>(null);
+  const [accountNotice, setAccountNotice] = React.useState<string | null>(null);
+
+  async function saveAccount() {
+    setAccountError(null);
+    setAccountNotice(null);
+
+    const changingEmail = account.email !== props.profile.email;
+    const changingPassword = account.newPassword.length > 0;
+
+    if (!changingEmail && !changingPassword) {
+      setAccountError('Altere o e-mail ou informe uma nova senha.');
+      return;
+    }
+    if (changingPassword && account.newPassword !== account.confirmPassword) {
+      setAccountError('A confirmação não confere com a nova senha.');
+      return;
+    }
+
+    setAccountSaving(true);
+    const response = await fetch('/api/account', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        currentPassword: account.currentPassword,
+        ...(changingEmail ? { email: account.email } : {}),
+        ...(changingPassword ? { newPassword: account.newPassword } : {}),
+      }),
+    });
+
+    const data = await response.json();
+    setAccountSaving(false);
+
+    if (!response.ok) {
+      setAccountError(data.error ?? 'Não foi possível atualizar os dados de acesso.');
+      return;
+    }
+
+    setAccount((a) => ({ ...a, currentPassword: '', newPassword: '', confirmPassword: '' }));
+    setAccountNotice(
+      [data.emailChanged && 'E-mail atualizado', data.passwordChanged && 'Senha atualizada']
+        .filter(Boolean)
+        .join(' · ') + '.',
+    );
+    router.refresh();
+  }
 
   async function save() {
     setSaving(true);
@@ -215,22 +272,77 @@ export function SettingsWorkspace(props: {
       {notice && <Alert tone="warning">{notice}</Alert>}
 
       {tab === 'perfil' && (
-        <Card>
-          <CardContent className="grid gap-4 sm:grid-cols-2">
-            <Field label="Nome">
-              <Input value={profile.name} onChange={(e) => setProfile({ ...profile, name: e.target.value })} />
-            </Field>
-            <Field label="E-mail" hint="O e-mail é o seu login e não pode ser alterado aqui.">
-              <Input value={profile.email} disabled />
-            </Field>
-            <Field label="Empresa">
-              <Input value={profile.company ?? ''} onChange={(e) => setProfile({ ...profile, company: e.target.value })} />
-            </Field>
-            <Field label="Telefone">
-              <Input value={profile.phone ?? ''} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} />
-            </Field>
-          </CardContent>
-        </Card>
+        <div className="space-y-4">
+          <Card>
+            <CardContent className="grid gap-4 sm:grid-cols-2">
+              <Field label="Nome">
+                <Input value={profile.name} onChange={(e) => setProfile({ ...profile, name: e.target.value })} />
+              </Field>
+              <Field label="E-mail" hint="Seu login. Para trocar, use o bloco de acesso abaixo.">
+                <Input value={props.profile.email} disabled />
+              </Field>
+              <Field label="Empresa">
+                <Input value={profile.company ?? ''} onChange={(e) => setProfile({ ...profile, company: e.target.value })} />
+              </Field>
+              <Field label="Telefone">
+                <Input value={profile.phone ?? ''} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} />
+              </Field>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="space-y-4">
+              <div>
+                <p className="text-sm font-semibold text-ink-900">E-mail e senha de acesso</p>
+                <p className="mt-0.5 text-xs text-ink-500">
+                  Alterar qualquer um dos dois exige a senha atual. Deixe a nova senha em branco se
+                  quiser trocar só o e-mail.
+                </p>
+              </div>
+
+              {accountError && <Alert tone="danger">{accountError}</Alert>}
+              {accountNotice && <Alert tone="positive">{accountNotice}</Alert>}
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Novo e-mail">
+                  <Input
+                    type="email"
+                    value={account.email}
+                    onChange={(e) => setAccount({ ...account, email: e.target.value })}
+                    autoComplete="username"
+                  />
+                </Field>
+                <Field label="Senha atual" hint="Obrigatória para confirmar a alteração.">
+                  <PasswordInput
+                    value={account.currentPassword}
+                    onChange={(e) => setAccount({ ...account, currentPassword: e.target.value })}
+                    autoComplete="current-password"
+                  />
+                </Field>
+                <Field label="Nova senha" hint="Mínimo de 8 caracteres.">
+                  <PasswordInput
+                    value={account.newPassword}
+                    onChange={(e) => setAccount({ ...account, newPassword: e.target.value })}
+                    autoComplete="new-password"
+                  />
+                </Field>
+                <Field label="Confirmar nova senha">
+                  <PasswordInput
+                    value={account.confirmPassword}
+                    onChange={(e) => setAccount({ ...account, confirmPassword: e.target.value })}
+                    autoComplete="new-password"
+                  />
+                </Field>
+              </div>
+
+              <div className="flex justify-end">
+                <Button onClick={saveAccount} loading={accountSaving} disabled={!account.currentPassword}>
+                  Atualizar acesso
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {tab === 'jornada' && (

@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 /* ==========================================================================
@@ -182,6 +183,45 @@ export const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<'in
     );
   },
 );
+
+/**
+ * Campo de senha com alternancia de visibilidade.
+ *
+ * Digitar senha as cegas em celular e a maior fonte de "senha invalida" que
+ * na verdade era erro de digitacao — o olho resolve isso sem afrouxar nada.
+ */
+export const PasswordInput = React.forwardRef<
+  HTMLInputElement,
+  Omit<React.ComponentProps<'input'>, 'type'>
+>(function PasswordInput({ className, ...props }, ref) {
+  const [visible, setVisible] = React.useState(false);
+  return (
+    <div className="relative">
+      <input
+        ref={ref}
+        type={visible ? 'text' : 'password'}
+        className={cn(
+          'h-9.5 w-full rounded-lg border border-ink-300 bg-white pl-3 pr-10 text-sm text-ink-900',
+          'placeholder:text-ink-400 transition-colors',
+          'hover:border-ink-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20',
+          'disabled:bg-ink-100 disabled:text-ink-500',
+          className,
+        )}
+        {...props}
+      />
+      <button
+        type="button"
+        onClick={() => setVisible((v) => !v)}
+        tabIndex={-1}
+        aria-label={visible ? 'Ocultar senha' : 'Mostrar senha'}
+        title={visible ? 'Ocultar senha' : 'Mostrar senha'}
+        className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-ink-400 transition-colors hover:text-ink-700"
+      >
+        {visible ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+      </button>
+    </div>
+  );
+});
 
 export const Select = React.forwardRef<HTMLSelectElement, React.ComponentProps<'select'>>(
   function Select({ className, children, ...props }, ref) {
