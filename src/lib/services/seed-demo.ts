@@ -10,10 +10,10 @@ const DEMO_PASSWORD = process.env.DEMO_PASSWORD ?? 'facilitavet';
 /**
  * Popula a organizacao de demonstracao (secoes 64 e 65).
  *
- * Compartilhado entre o script de CLI (`prisma/seed.ts`) e a rota
- * `/api/admin/seed` — usada quando o ambiente de build/CI nao consegue
- * alcancar o banco diretamente e o seed precisa rodar a partir do runtime
- * da propria aplicacao (que ja fala com o banco normalmente).
+ * Chamado por `prisma/seed.ts`. Ja foi exposto tambem como rota HTTP, para
+ * popular um banco que o ambiente de build nao alcancava; a rota saiu depois
+ * de cumprir o papel, mas a logica fica aqui — separada do script de CLI —
+ * porque esse cenario tende a se repetir a cada ambiente novo.
  */
 export async function seedDemoData(prisma: PrismaClient) {
   const organization = await prisma.organization.upsert({
