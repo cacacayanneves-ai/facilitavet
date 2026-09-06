@@ -21,7 +21,7 @@ export class LogWhatsAppProvider implements WhatsAppProvider {
     return {
       status: 'SKIPPED',
       provider: this.name,
-      error: 'Credenciais do WhatsApp nao configuradas: mensagem registrada no outbox, mas nao enviada.',
+      error: 'Credenciais do WhatsApp não configuradas: mensagem registrada no outbox, mas não enviada.',
     };
   }
 }

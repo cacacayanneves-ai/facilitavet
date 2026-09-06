@@ -14,7 +14,7 @@ import {
 } from '@/components/ui';
 import type { CalendarDay } from '@/lib/services/calendar';
 import type { FeasibilityReport } from '@/lib/route-planner';
-import { cn, formatDuration, formatKm, monthName, weekdayShort } from '@/lib/utils';
+import { cn, formatDuration, formatKm, formatNumber, monthName } from '@/lib/utils';
 import { GenerationProgress } from './generation-progress';
 
 interface Props {
@@ -349,7 +349,7 @@ export function PlanningWorkspace(props: Props) {
                   <Row label="Visitas" value={`${props.existingPlan.targetVisits}`} />
                   <Row label="Distância" value={formatKm(props.existingPlan.totalDistanceMeters)} />
                   <Row label="Deslocamento" value={formatDuration(props.existingPlan.totalDurationSeconds)} />
-                  <Row label="Score médio" value={`${props.existingPlan.averageScore}/100`} />
+                  <Row label="Score médio" value={`${formatNumber(props.existingPlan.averageScore)}/100`} />
                 </dl>
               </CardContent>
             </Card>
@@ -411,7 +411,7 @@ function ResultCard({ result }: { result: GenerationResult }) {
           <Row label="Dias" value={`${s.plannedDays}`} />
           <Row label={s.estimated ? 'Distância estimada' : 'Distância'} value={formatKm(s.totalDistanceMeters)} />
           <Row label="Deslocamento" value={formatDuration(s.totalDurationSeconds)} />
-          <Row label="Score médio" value={`${s.averageScore}/100`} />
+          <Row label="Score médio" value={`${formatNumber(s.averageScore)}/100`} />
         </dl>
 
         {/* Economia so aparece com comparacao calculada — nunca inventada. */}

@@ -113,9 +113,10 @@ export function buildFullRouteUrl(args: {
 }): string | null {
   if (args.stops.length === 0) return null;
 
-  const points = [...args.stops];
-  const final = args.destination ?? points.pop()!;
-  const waypoints = args.destination ? points : points;
+  // Sem destino explicito, a ultima parada do dia vira o destino e as demais
+  // viram waypoints intermediarios.
+  const waypoints = [...args.stops];
+  const final = args.destination ?? waypoints.pop()!;
 
   const url = new URL('https://www.google.com/maps/dir/');
   url.searchParams.set('api', '1');

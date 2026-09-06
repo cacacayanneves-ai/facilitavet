@@ -79,7 +79,7 @@ export async function reorderRoute(args: {
     .filter((c): c is NonNullable<typeof c> => Boolean(c));
 
   if (ordered.length !== route.stops.length) {
-    throw new Error('A nova ordem precisa conter exatamente as mesmas clinicas da rota.');
+    throw new Error('A nova ordem precisa conter exatamente as mesmas clínicas da rota.');
   }
 
   return applyRoute({
@@ -111,12 +111,12 @@ export async function swapStop(args: {
   const replacement = await prisma.clinic.findFirst({
     where: { id: args.replacementClinicId, organizationId: user.organizationId, active: true },
   });
-  if (!replacement) throw new Error('Clinica substituta nao encontrada na carteira.');
+  if (!replacement) throw new Error('Clínica substituta não encontrada na carteira.');
   if (replacement.latitude === null || replacement.longitude === null) {
-    throw new Error('A clinica substituta esta sem localizacao definida.');
+    throw new Error('A clínica substituta está sem localização definida.');
   }
   if (route.stops.some((s) => s.clinicId === replacement.id)) {
-    throw new Error('Essa clinica ja esta nesta rota.');
+    throw new Error('Essa clínica já está nesta rota.');
   }
 
   const clinics = route.stops.map((stop) =>

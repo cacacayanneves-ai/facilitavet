@@ -245,15 +245,15 @@ export async function validateRows(args: {
     const issues: RowIssue[] = [];
 
     if (!name) {
-      issues.push({ level: 'error', code: 'MISSING_NAME', message: 'Linha sem nome da clinica.' });
+      issues.push({ level: 'error', code: 'MISSING_NAME', message: 'Linha sem nome da clínica.' });
     }
     if (!category) {
       issues.push({
         level: 'error',
         code: 'INVALID_CATEGORY',
         message: categoryRaw
-          ? `Categoria "${categoryRaw}" nao reconhecida. Use Cat 1, Cat 2 ou Cat 3.`
-          : 'Categoria nao informada.',
+          ? `Categoria "${categoryRaw}" não reconhecida. Use Cat 1, Cat 2 ou Cat 3.`
+          : 'Categoria não informada.',
       });
     }
 
@@ -276,7 +276,7 @@ export async function validateRows(args: {
       issues.push({
         level: 'warning',
         code: 'NO_LOCATION_DATA',
-        message: 'Sem endereco, CEP, bairro ou coordenadas: nao sera possivel localizar esta clinica.',
+        message: 'Sem endereço, CEP, bairro ou coordenadas: não será possível localizar esta clínica.',
       });
     }
 
@@ -295,7 +295,7 @@ export async function validateRows(args: {
         issues.push({
           level: 'warning',
           code: 'DUPLICATE_IN_DATABASE',
-          message: 'Ja existe na carteira. Sera atualizada em vez de duplicada.',
+          message: 'Já existe na carteira. Será atualizada em vez de duplicada.',
         });
       }
     }
@@ -367,11 +367,11 @@ export async function geocodeRows(
         row.geocodeCandidates = result.candidates.map((c) => ({ lat: c.lat, lng: c.lng, label: c.label }));
       } else {
         row.geocodeStatus = 'FAILED';
-        row.geocodeLabel = result.reason ?? 'Nao foi possivel localizar.';
+        row.geocodeLabel = result.reason ?? 'Não foi possível localizar.';
       }
     } catch (error) {
       row.geocodeStatus = 'FAILED';
-      row.geocodeLabel = error instanceof Error ? error.message : 'Falha na geocodificacao.';
+      row.geocodeLabel = error instanceof Error ? error.message : 'Falha na geocodificação.';
       logger.warn('Falha ao geocodificar linha da importacao', {
         scope: 'import',
         row: row.index,

@@ -16,7 +16,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ visit
     const input = schema.parse(await request.json());
 
     const visit = await updateVisitStatus({ visitId, userId: user.id, ...input });
-    if (!visit) throw new Error('Visita nao encontrada.');
+    if (!visit) throw new Error('Visita não encontrada.');
 
     return {
       id: visit.id,

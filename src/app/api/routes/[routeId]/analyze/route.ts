@@ -20,7 +20,7 @@ export async function POST(_request: Request, context: { params: Promise<{ route
       where: { id: routeId, monthlyPlan: { userId: user.id } },
       select: { id: true },
     });
-    if (!owned) throw new Error('Rota nao encontrada.');
+    if (!owned) throw new Error('Rota não encontrada.');
 
     return { summary: await analyzeRoute(routeId) };
   });

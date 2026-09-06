@@ -25,10 +25,10 @@ export async function handle<T>(
     return NextResponse.json(await action());
   } catch (error) {
     if (error instanceof UnauthorizedError) {
-      return fail('Sessao expirada. Entre novamente.', 401);
+      return fail('Sessão expirada. Entre novamente.', 401);
     }
     if (error instanceof ZodError) {
-      return fail('Dados invalidos.', 422, error.issues.map((i) => ({ path: i.path, message: i.message })));
+      return fail('Dados inválidos.', 422, error.issues.map((i) => ({ path: i.path, message: i.message })));
     }
 
     const message = error instanceof Error ? error.message : String(error);

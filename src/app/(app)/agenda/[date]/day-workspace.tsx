@@ -26,7 +26,7 @@ import {
 import { GoogleRouteMap } from '@/components/map/google-route-map';
 import { RouteMap } from '@/components/map/route-map';
 import type { SerializedRoute, SerializedStop } from '@/components/route/types';
-import { cn, formatDuration, formatKm, formatTime, VISIT_STATUS_LABEL } from '@/lib/utils';
+import { cn, formatDuration, formatKm, formatNumber, formatTime, VISIT_STATUS_LABEL } from '@/lib/utils';
 
 /**
  * ROTEIRO DO DIA — a tela operacional.
@@ -180,7 +180,7 @@ export function DayWorkspace({
         <Stat label="Deslocamento" value={formatDuration(route.totalDurationSeconds)} />
         <Stat
           label="Score"
-          value={`${route.score ?? 0}`}
+          value={formatNumber(route.score ?? 0)}
           hint={
             scoreBreakdown.backtracking !== undefined
               ? `${scoreBreakdown.backtracking} inversões · raio ${formatKm(scoreBreakdown.concentrationMeters ?? 0, 1)}`
@@ -204,7 +204,7 @@ export function DayWorkspace({
 
       {error && <Alert tone="danger">{error}</Alert>}
 
-      <div className="grid gap-5 lg:grid-cols-[1fr_26rem]">
+      <div className="grid items-start gap-5 lg:grid-cols-[1fr_26rem]">
         {/* Lista de paradas */}
         <Card className="overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-200 px-5 py-3">

@@ -5,7 +5,7 @@ import { fail, ok } from '@/lib/api';
 import { logger } from '@/lib/logger';
 
 const schema = z.object({
-  email: z.string().email('Informe um e-mail valido.'),
+  email: z.string().email('Informe um e-mail válido.'),
   password: z.string().min(1, 'Informe a senha.'),
 });
 
@@ -24,7 +24,7 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
-    return fail(parsed.error.issues[0]?.message ?? 'Dados invalidos.', 422);
+    return fail(parsed.error.issues[0]?.message ?? 'Dados inválidos.', 422);
   }
 
   const email = parsed.data.email.trim().toLowerCase();
@@ -33,7 +33,7 @@ export async function POST(request: Request) {
 
   if (!user || !valid) {
     logger.warn('Tentativa de login sem sucesso', { scope: 'auth', email });
-    return fail('E-mail ou senha invalidos.', 401);
+    return fail('E-mail ou senha inválidos.', 401);
   }
 
   await createSession({ userId: user.id, organizationId: user.organizationId, email: user.email });

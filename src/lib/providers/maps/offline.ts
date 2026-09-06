@@ -14,13 +14,13 @@ export class OfflineMapsProvider implements MapsProvider {
   readonly name = 'offline-geometric';
   readonly authoritative = false;
 
-  async geocode(query: GeocodeQuery): Promise<GeocodeResult> {
+  async geocode(_query: GeocodeQuery): Promise<GeocodeResult> {
     return {
       status: 'FAILED',
       candidates: [],
       provider: this.name,
       reason:
-        'Geocodificacao indisponivel: configure GOOGLE_MAPS_API_KEY ou informe latitude e longitude manualmente.',
+        'Geocodificação indisponível: configure GOOGLE_MAPS_API_KEY ou informe latitude e longitude manualmente.',
     };
   }
 

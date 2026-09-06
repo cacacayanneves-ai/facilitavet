@@ -28,14 +28,14 @@ export async function POST(request: Request) {
   const file = formData?.get('file');
   if (!(file instanceof File)) return fail('Envie um arquivo XLSX ou CSV.', 422);
   if (file.size > MAX_BYTES) return fail('Arquivo acima de 8 MB.', 413);
-  if (!/\.(xlsx|csv)$/i.test(file.name)) return fail('Formato nao suportado. Use XLSX ou CSV.', 415);
+  if (!/\.(xlsx|csv)$/i.test(file.name)) return fail('Formato não suportado. Use XLSX ou CSV.', 415);
 
   return handle('api.import.upload', async () => {
     const buffer = Buffer.from(await file.arrayBuffer());
     const sheet = await parseSpreadsheet(file.name, buffer);
 
     if (sheet.rows.length === 0) {
-      throw new Error('A planilha nao tem linhas de dados.');
+      throw new Error('A planilha não tem linhas de dados.');
     }
 
     const mapping = suggestColumnMapping(sheet.columns);
@@ -82,7 +82,7 @@ export async function PUT(request: Request) {
     const batch = await prisma.importBatch.findFirst({
       where: { id: input.batchId, organizationId: user.organizationId },
     });
-    if (!batch) throw new Error('Lote de importacao nao encontrado.');
+    if (!batch) throw new Error('Lote de importação não encontrado.');
 
     const rows = batch.rows as unknown as Array<Record<string, string>>;
     const settings = await prisma.userSettings.findUnique({ where: { userId: user.id } });
@@ -144,8 +144,8 @@ export async function PATCH(request: Request) {
     const batch = await prisma.importBatch.findFirst({
       where: { id: input.batchId, organizationId: user.organizationId },
     });
-    if (!batch) throw new Error('Lote de importacao nao encontrado.');
-    if (batch.status === 'COMMITTED') throw new Error('Este lote ja foi importado.');
+    if (!batch) throw new Error('Lote de importação não encontrado.');
+    if (batch.status === 'COMMITTED') throw new Error('Este lote já foi importado.');
 
     const rows = batch.rows as unknown as NormalizedRow[];
     const overrides = new Map((input.overrides ?? []).map((o) => [o.index, o]));

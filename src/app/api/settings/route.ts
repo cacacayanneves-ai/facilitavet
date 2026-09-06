@@ -47,7 +47,7 @@ const schema = z.object({
       maxVisitsPerDay: z.number().int().min(1).max(30),
     })
     .refine((v) => v.minVisitsPerDay <= v.maxVisitsPerDay, {
-      message: 'O minimo por dia nao pode ser maior que o maximo.',
+      message: 'O mínimo por dia não pode ser maior que o máximo.',
       path: ['minVisitsPerDay'],
     })
     .optional(),
@@ -99,7 +99,7 @@ export async function PATCH(request: Request) {
           anchors[`${prefix}Latitude`] = result.candidates[0].lat;
           anchors[`${prefix}Longitude`] = result.candidates[0].lng;
         } else if (anchors[`${prefix}Latitude`] == null) {
-          geocodeWarning = `Nao foi possivel localizar o endereco de ${prefix === 'origin' ? 'origem' : 'destino'}. Informe latitude e longitude manualmente.`;
+          geocodeWarning = `Não foi possível localizar o endereço de ${prefix === 'origin' ? 'origem' : 'destino'}. Informe latitude e longitude manualmente.`;
         }
       }
       delete (anchors as Record<string, unknown>).geocode;

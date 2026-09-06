@@ -21,7 +21,7 @@ export async function POST(request: Request, context: { params: Promise<{ routeI
       reoptimize: input.reoptimize,
     });
 
-    if (!result) throw new Error('Rota nao encontrada.');
+    if (!result) throw new Error('Rota não encontrada.');
     return result;
   });
 }

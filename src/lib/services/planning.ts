@@ -49,7 +49,7 @@ export async function generateMonthlyPlan(options: GeneratePlanOptions): Promise
     where: { id: options.userId },
     include: { settings: true },
   });
-  if (!user?.settings) throw new Error('Usuario sem configuracoes');
+  if (!user?.settings) throw new Error('Usuário sem configurações');
 
   const settings = user.settings;
   const targetVisits = options.targetVisits ?? settings.monthlyTarget;

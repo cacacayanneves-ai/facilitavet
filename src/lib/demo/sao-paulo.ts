@@ -20,45 +20,45 @@ export interface DemoNeighborhood {
 
 export const SAO_PAULO_NEIGHBORHOODS: DemoNeighborhood[] = [
   { name: 'Vila Mariana', zone: 'Zona Sul', lat: -23.5893, lng: -46.6345, spread: 0.011, weight: 12 },
-  { name: 'Saude', zone: 'Zona Sul', lat: -23.6182, lng: -46.6386, spread: 0.010, weight: 9 },
+  { name: 'Saúde', zone: 'Zona Sul', lat: -23.6182, lng: -46.6386, spread: 0.010, weight: 9 },
   { name: 'Moema', zone: 'Zona Sul', lat: -23.6013, lng: -46.6656, spread: 0.010, weight: 9 },
   { name: 'Santo Amaro', zone: 'Zona Sul', lat: -23.6527, lng: -46.7076, spread: 0.013, weight: 8 },
   { name: 'Ipiranga', zone: 'Zona Sudeste', lat: -23.5916, lng: -46.6100, spread: 0.011, weight: 7 },
   { name: 'Mooca', zone: 'Zona Leste', lat: -23.5537, lng: -46.5978, spread: 0.010, weight: 7 },
-  { name: 'Tatuape', zone: 'Zona Leste', lat: -23.5404, lng: -46.5765, spread: 0.011, weight: 7 },
+  { name: 'Tatuapé', zone: 'Zona Leste', lat: -23.5404, lng: -46.5765, spread: 0.011, weight: 7 },
   { name: 'Penha', zone: 'Zona Leste', lat: -23.5265, lng: -46.5427, spread: 0.012, weight: 6 },
   { name: 'Santana', zone: 'Zona Norte', lat: -23.5024, lng: -46.6248, spread: 0.011, weight: 7 },
   { name: 'Tucuruvi', zone: 'Zona Norte', lat: -23.4770, lng: -46.6027, spread: 0.011, weight: 5 },
   { name: 'Casa Verde', zone: 'Zona Norte', lat: -23.5093, lng: -46.6614, spread: 0.010, weight: 5 },
   { name: 'Pinheiros', zone: 'Zona Oeste', lat: -23.5629, lng: -46.6944, spread: 0.010, weight: 9 },
   { name: 'Lapa', zone: 'Zona Oeste', lat: -23.5280, lng: -46.7040, spread: 0.011, weight: 7 },
-  { name: 'Butanta', zone: 'Zona Oeste', lat: -23.5713, lng: -46.7200, spread: 0.012, weight: 6 },
+  { name: 'Butantã', zone: 'Zona Oeste', lat: -23.5713, lng: -46.7200, spread: 0.012, weight: 6 },
   { name: 'Perdizes', zone: 'Zona Oeste', lat: -23.5378, lng: -46.6780, spread: 0.009, weight: 6 },
   { name: 'Bela Vista', zone: 'Centro', lat: -23.5595, lng: -46.6440, spread: 0.008, weight: 6 },
-  { name: 'Santa Cecilia', zone: 'Centro', lat: -23.5378, lng: -46.6560, spread: 0.008, weight: 5 },
-  { name: 'Tremembe', zone: 'Zona Norte', lat: -23.4593, lng: -46.6003, spread: 0.013, weight: 4 },
-  { name: 'Sao Mateus', zone: 'Zona Leste', lat: -23.6003, lng: -46.4763, spread: 0.014, weight: 4 },
+  { name: 'Santa Cecília', zone: 'Centro', lat: -23.5378, lng: -46.6560, spread: 0.008, weight: 5 },
+  { name: 'Tremembé', zone: 'Zona Norte', lat: -23.4593, lng: -46.6003, spread: 0.013, weight: 4 },
+  { name: 'São Mateus', zone: 'Zona Leste', lat: -23.6003, lng: -46.4763, spread: 0.014, weight: 4 },
   { name: 'Campo Limpo', zone: 'Zona Sul', lat: -23.6483, lng: -46.7590, spread: 0.013, weight: 5 },
 ];
 
 const PREFIXES = [
-  'Clinica Veterinaria',
-  'Hospital Veterinario',
-  'Centro Veterinario',
+  'Clínica Veterinária',
+  'Hospital Veterinário',
+  'Centro Veterinário',
   'Pet Center',
-  'Clinica Pet',
+  'Clínica Pet',
   'Vet Care',
   'Animal Care',
-  'Policlinica Veterinaria',
+  'Policlínica Veterinária',
 ];
 
 const NAMES = [
-  'Alfa', 'Beta', 'Gama', 'Delta', 'Epsilon', 'Zeta', 'Sigma', 'Omega', 'Aurora', 'Bandeirantes',
-  'Pantanal', 'Amazonia', 'Atlantica', 'Ipe', 'Jacaranda', 'Aroeira', 'Cambui', 'Perola', 'Horizonte',
-  'Primavera', 'Serrana', 'Boa Vista', 'Sao Jorge', 'Santa Clara', 'Bom Pastor', 'Vida Animal',
-  'Amigo Fiel', 'Quatro Patas', 'Nobre', 'Vitalis', 'Anima', 'Zoo Vida', 'Pet Vida', 'Sao Francisco',
-  'Bicho Feliz', 'Vet Mais', 'Care Plus', 'Bem Estar', 'Reviver', 'Integrar', 'Mundo Animal',
-  'Companheiro', 'Guardiao', 'Estrela', 'Cristal', 'Diamante', 'Esmeralda', 'Safira', 'Rubi', 'Opala',
+  'Alfa', 'Beta', 'Gama', 'Delta', 'Épsilon', 'Zeta', 'Sigma', 'Ômega', 'Aurora', 'Bandeirantes',
+  'Pantanal', 'Amazônia', 'Atlântica', 'Ipê', 'Jacarandá', 'Aroeira', 'Cambuí', 'Pérola', 'Horizonte',
+  'Primavera', 'Serrana', 'Boa Vista', 'São Jorge', 'Santa Clara', 'Bom Pastor', 'Vida Animal',
+  'Amigo Fiel', 'Quatro Patas', 'Nobre', 'Vitalis', 'Ânima', 'Zoo Vida', 'Pet Vida', 'São Francisco',
+  'Bicho Feliz', 'Vet Mais', 'Care Plus', 'Bem-Estar', 'Reviver', 'Integrar', 'Mundo Animal',
+  'Companheiro', 'Guardião', 'Estrela', 'Cristal', 'Diamante', 'Esmeralda', 'Safira', 'Rubi', 'Opala',
 ];
 
 export interface DemoClinicSeed {
@@ -133,7 +133,7 @@ export function generateDemoClinics(
       category: categories[i],
       neighborhood: hood.name,
       zone: hood.zone,
-      city: 'Sao Paulo',
+      city: 'São Paulo',
       state: 'SP',
       address: `Rua ${NAMES[Math.floor(rng() * NAMES.length)]}, ${100 + Math.floor(rng() * 1800)}`,
       postalCode: `0${1 + Math.floor(rng() * 8)}${String(Math.floor(rng() * 1000)).padStart(3, '0')}-${String(Math.floor(rng() * 1000)).padStart(3, '0')}`,
@@ -158,14 +158,14 @@ function gaussianPair(rng: () => number): [number, number] {
 /** Endereco de casa/escritorio da demo. */
 export const DEMO_HOME = {
   label: 'Casa — Vila Mariana',
-  address: 'Rua Domingos de Morais, 1200 — Vila Mariana, Sao Paulo/SP',
+  address: 'Rua Domingos de Morais, 1200 — Vila Mariana, São Paulo/SP',
   lat: -23.5975,
   lng: -46.6386,
 };
 
 export const DEMO_OFFICE = {
-  label: 'Escritorio — Pinheiros',
-  address: 'Av. Faria Lima, 1500 — Pinheiros, Sao Paulo/SP',
+  label: 'Escritório — Pinheiros',
+  address: 'Av. Faria Lima, 1500 — Pinheiros, São Paulo/SP',
   lat: -23.5760,
   lng: -46.6890,
 };

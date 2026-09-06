@@ -9,7 +9,7 @@ export async function GET(request: Request, context: { params: Promise<{ routeId
     const sequence = Number.parseInt(new URL(request.url).searchParams.get('sequence') ?? '1', 10);
 
     const alternatives = await alternativesForStop({ routeId, userId: user.id, sequence });
-    if (!alternatives) throw new Error('Rota nao encontrada.');
+    if (!alternatives) throw new Error('Rota não encontrada.');
     return { alternatives };
   });
 }

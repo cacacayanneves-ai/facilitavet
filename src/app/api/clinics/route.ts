@@ -82,7 +82,7 @@ export async function POST(request: Request) {
         geocodeStatus = 'RESOLVED';
       } else {
         geocodeStatus = 'FAILED';
-        geocodeLabel = result.reason ?? 'Nao foi possivel localizar.';
+        geocodeLabel = result.reason ?? 'Não foi possível localizar.';
       }
     }
 

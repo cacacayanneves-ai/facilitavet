@@ -79,6 +79,14 @@ export function percent(value: number): string {
   return `${Math.round(value)}%`;
 }
 
+/** Numero no padrao pt-BR (virgula decimal). */
+export function formatNumber(value: number, decimals = 1): string {
+  return value.toLocaleString('pt-BR', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+}
+
 export const CATEGORY_LABEL: Record<string, string> = {
   CAT1: 'Cat 1',
   CAT2: 'Cat 2',

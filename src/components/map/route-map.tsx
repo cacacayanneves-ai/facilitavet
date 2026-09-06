@@ -113,7 +113,7 @@ export function RouteMap({
             dentro da cidade em vez de ver pontos flutuando no vazio. */}
         {context.map((point, index) => {
           const [x, y] = project(point);
-          return <circle key={index} cx={x} cy={y} r={1.9} fill="var(--color-ink-300)" opacity={0.65} />;
+          return <circle key={index} cx={x} cy={y} r={2.6} fill="var(--color-ink-400)" opacity={0.5} />;
         })}
 
         {/* Linha da rota */}

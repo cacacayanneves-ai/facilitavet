@@ -11,6 +11,7 @@ import {
   formatDateLong,
   formatDuration,
   formatKm,
+  formatNumber,
   greeting,
   monthName,
 } from '@/lib/utils';
@@ -98,7 +99,7 @@ export default async function DashboardPage() {
           />
           <MetricCard
             label="Média diária"
-            value={data.progress.averagePerDay ? data.progress.averagePerDay.toLocaleString('pt-BR') : '—'}
+            value={data.progress.averagePerDay ? formatNumber(data.progress.averagePerDay) : '—'}
             hint="visitas por dia planejado"
             icon={<Gauge className="size-4" strokeWidth={1.75} />}
           />

@@ -24,7 +24,7 @@ export async function GET(_request: Request, context: { params: Promise<{ clinic
     const user = await requireApiUser();
     const { clinicId } = await context.params;
     const history = await getClinicHistory(clinicId, user.organizationId);
-    if (!history) throw new Error('Clinica nao encontrada.');
+    if (!history) throw new Error('Clínica não encontrada.');
     return history;
   });
 }
@@ -38,7 +38,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ clini
     const existing = await prisma.clinic.findFirst({
       where: { id: clinicId, organizationId: user.organizationId },
     });
-    if (!existing) throw new Error('Clinica nao encontrada.');
+    if (!existing) throw new Error('Clínica não encontrada.');
 
     // Corrigir coordenada manualmente marca a clinica como localizada: e uma
     // decisao humana explicita e vale mais que o palpite do geocoder.
@@ -68,7 +68,7 @@ export async function DELETE(_request: Request, context: { params: Promise<{ cli
     const existing = await prisma.clinic.findFirst({
       where: { id: clinicId, organizationId: user.organizationId },
     });
-    if (!existing) throw new Error('Clinica nao encontrada.');
+    if (!existing) throw new Error('Clínica não encontrada.');
 
     // Desativamos em vez de apagar: apagar destruiria o historico de visitas
     // da clinica, que e informacao comercial acumulada.
