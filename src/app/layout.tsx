@@ -20,7 +20,7 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: {
-    default: 'Facilita Vet — planejamento inteligente de visitas',
+    default: 'Facilita Vet · planejamento inteligente de visitas',
     template: '%s · Facilita Vet',
   },
   description:

@@ -43,17 +43,17 @@ export function evaluateFeasibility(args: {
     const worst = oversizedClinics.reduce((a, b) => (b.veterinarians > a.veterinarians ? b : a));
     message =
       `${oversizedClinics.length === 1 ? 'Uma clínica tem' : `${oversizedClinics.length} clínicas têm`} ` +
-      `mais veterinários que o limite de ${maxPerDay} visitas por dia — ` +
+      `mais veterinários que o limite de ${maxPerDay} visitas por dia. ` +
       `${worst.name} tem ${worst.veterinarians}. Uma clínica não pode ser dividida entre dois dias, ` +
       `então o limite diário precisa ser de pelo menos ${worst.veterinarians} visitas.`;
   } else if (deficit > 0) {
     message =
       `Não é possível concluir as ${requiredVisits} visitas nas condições atuais. ` +
-      `Com ${availableDays} dia(s) e no máximo ${maxPerDay} visita(s) por dia, a capacidade é de ${capacity} visitas — faltam ${deficit}. ` +
+      `Com ${availableDays} dia(s) e no máximo ${maxPerDay} visita(s) por dia, a capacidade é de ${capacity} visitas, faltam ${deficit}. ` +
       `Você precisa de pelo menos ${suggestedDays} dia(s) com ${maxPerDay} visitas por dia, ou de ${suggestedMaxPerDay} visitas por dia nos ${availableDays} dias disponíveis.`;
   } else if (requiredVisits < minimumCapacity) {
     message =
-      `Plano viável. A meta de ${requiredVisits} visitas fica abaixo do mínimo preferido de ${minPerDay} por dia — alguns dias terão agenda curta.`;
+      `Plano viável. A meta de ${requiredVisits} visitas fica abaixo do mínimo preferido de ${minPerDay} por dia, então alguns dias terão agenda curta.`;
   } else {
     message =
       `Plano viável: ${requiredVisits} visitas em ${requiredStops} clínicas, distribuídas em ${availableDays} dia(s) ` +

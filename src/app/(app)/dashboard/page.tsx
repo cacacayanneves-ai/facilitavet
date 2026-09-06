@@ -53,9 +53,9 @@ export default async function DashboardPage() {
           </h2>
           <p className="mt-1 text-sm text-ink-500">
             {data.plan
-              ? <>Seu mês está <span className="font-medium text-ink-800">{planPercent}% planejado</span> — {planned} de {target} visitas distribuídas em {data.progress.plannedDays} dias.</>
+              ? <>Seu mês está <span className="font-medium text-ink-800">{planPercent}% planejado</span>, com {planned} de {target} visitas distribuídas em {data.progress.plannedDays} dias.</>
               : totalClinics === 0
-                ? <>Comece importando sua carteira de clínicas — o roteiro vem em seguida.</>
+                ? <>Comece importando sua carteira de clínicas. O roteiro vem em seguida.</>
                 : <>Sua carteira está pronta. Gere o roteiro de {monthName(data.month)} para começar.</>}
           </p>
         </section>
@@ -67,7 +67,7 @@ export default async function DashboardPage() {
             <EmptyState
               icon={<Upload className="size-5" strokeWidth={1.75} />}
               title="Sua carteira ainda está vazia"
-              description="Importe a planilha com suas clínicas — nome, endereço, categoria e quantos veterinários cada uma tem. Você revisa tudo antes de confirmar."
+              description="Importe a planilha com suas clínicas: nome, endereço, categoria e quantos veterinários cada uma tem. Você revisa tudo antes de confirmar."
               action={
                 <Link href="/carteira/importar">
                   <Button size="lg">
@@ -195,7 +195,7 @@ export default async function DashboardPage() {
                       <strong>{data.statistics.baseline.distanceSavingPercent}%</strong> do deslocamento
                       em relação a percorrer a carteira na ordem da planilha
                       {data.statistics.baseline.durationSavingSeconds > 0 && (
-                        <> — cerca de {formatDuration(data.statistics.baseline.durationSavingSeconds)} a menos no mês</>
+                        <>, cerca de {formatDuration(data.statistics.baseline.durationSavingSeconds)} a menos no mês</>
                       )}
                       .
                     </span>

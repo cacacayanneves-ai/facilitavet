@@ -378,7 +378,7 @@ function UploadStep({ onFile, busy }: { onFile: (file: File) => void; busy: bool
           <p className="font-medium text-ink-700">O que a planilha precisa ter</p>
           <p className="mt-1">
             No mínimo <strong>nome</strong> e <strong>categoria</strong> (Cat 1 / Cat 2 / Cat 3).
-            Endereço, bairro, cidade e CEP melhoram muito a localização — nome e bairro sozinhos
+            Endereço, bairro, cidade e CEP melhoram muito a localização, porque nome e bairro sozinhos
             frequentemente não bastam para encontrar o endereço exato.
           </p>
         </div>
@@ -491,7 +491,7 @@ function ReviewStep({
                       {row.geocodeStatus === 'AMBIGUOUS' && row.geocodeCandidates.length > 0 && (
                         <div className="mt-2 space-y-1 rounded-lg bg-ink-50 p-2">
                           <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-400">
-                            Vários endereços possíveis — escolha um
+                            Vários endereços possíveis, escolha um
                           </p>
                           {row.geocodeCandidates.slice(0, 4).map((candidate, i) => {
                             const chosen = override.latitude === candidate.lat;

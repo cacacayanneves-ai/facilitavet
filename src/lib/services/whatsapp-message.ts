@@ -71,7 +71,7 @@ export function buildRouteMessage(input: RouteMessageInput): string {
     lines.push(`🚗 Distância: ${prefix}${formatKm(input.totalDistanceMeters)}`);
     lines.push(`⏱️ Deslocamento: ${prefix}${formatDuration(input.totalDurationSeconds)}`);
     if (input.estimated) {
-      lines.push('(estimativa — rota real depende da Google Routes API)');
+      lines.push('(estimativa, a rota real depende da Google Routes API)');
     }
   }
 

@@ -41,7 +41,7 @@ export function AuthBrandPanel() {
           </p>
           <p className="mt-6 text-sm leading-relaxed text-brand-100/80">
             O Facilita Vet analisa sua carteira, respeita as regras de categoria, distribui as
-            visitas pelos dias úteis e monta rotas que concentram cada dia numa região — em vez de
+            visitas pelos dias úteis e monta rotas que concentram cada dia numa região, em vez de
             atravessar a cidade cinco vezes.
           </p>
         </blockquote>

@@ -459,7 +459,7 @@ export function SettingsWorkspace(props: {
               <div>
                 <p className="text-sm font-semibold text-ink-900">Ciclo de categorias</p>
                 <p className="mt-0.5 text-xs text-ink-500">
-                  Estas regras não estão no código — são configuração. Mude a frequência, a
+                  Estas regras não estão no código, são configuração. Mude a frequência, a
                   quantidade ou a ordem do rodízio e o motor passa a obedecer no próximo
                   planejamento.
                 </p>
@@ -832,7 +832,7 @@ export function SettingsWorkspace(props: {
                 <p className="text-sm font-semibold text-ink-900">Serviços externos</p>
                 <p className="mt-0.5 text-xs text-ink-500">
                   Todas as chaves ficam no servidor, nunca no navegador. O produto funciona sem
-                  nenhuma delas — apenas com menos precisão ou sem envio automático.
+                  nenhuma delas, apenas com menos precisão ou sem envio automático.
                 </p>
               </div>
 

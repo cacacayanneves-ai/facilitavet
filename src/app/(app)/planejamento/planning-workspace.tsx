@@ -234,7 +234,7 @@ export function PlanningWorkspace(props: Props) {
                           : day.reason === 'BLOCKED'
                             ? `Bloqueado: ${day.blockedReason ?? 'manual'}`
                             : day.available
-                              ? 'Dia útil — clique para bloquear'
+                              ? 'Dia útil, clique para bloquear'
                               : 'Fora dos dias de trabalho'
                       }
                       className={cn(
