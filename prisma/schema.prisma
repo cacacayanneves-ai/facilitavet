@@ -372,8 +372,11 @@ model Holiday {
   date           DateTime @db.Date
   name           String
   country        String   @default("BR")
-  state          String?
-  city           String?
+  // Vazio = abrangencia nacional/estadual. Usamos "" em vez de NULL de
+  // proposito: em Postgres NULL != NULL num indice unico, entao campos
+  // nulos aqui desativariam silenciosamente a deduplicacao de feriados.
+  state          String   @default("")
+  city           String   @default("")
 
   organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 

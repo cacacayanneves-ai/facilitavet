@@ -18,7 +18,9 @@
     "db:reset": "prisma migrate reset --force",
     "demo:route": "tsx scripts/demo-route.ts",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "demo:plan": "tsx scripts/demo-plan.ts",
+    "db:setup": "prisma migrate deploy && tsx prisma/seed.ts && tsx scripts/demo-plan.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
