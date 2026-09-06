@@ -1,4 +1,6 @@
 import ExcelJS from 'exceljs';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parseSpreadsheet } from '@/lib/services/import';
 
@@ -189,5 +191,17 @@ describe('planilha real: uma linha por veterinario, categoria = aba', () => {
     expect(result.rows).toHaveLength(2);
     expect(result.rows[0].Categoria).toBe('Cat 1');
     expect(result.notices).toHaveLength(0);
+  });
+
+  // Guarda o arquivo servido em /exemplo-carteira-facilitavet.xlsx (tela de
+  // importação): se um ajuste nos sinonimos de coluna um dia parar de
+  // reconhecer o proprio exemplo do produto, e sinal de regressao real.
+  it('a planilha de exemplo baixavel na tela de importação é reconhecida pelo formato por veterinário', async () => {
+    const buffer = await readFile(path.join(process.cwd(), 'public/exemplo-carteira-facilitavet.xlsx'));
+    const result = await parseSpreadsheet('exemplo-carteira-facilitavet.xlsx', buffer);
+
+    expect(result.rows).toHaveLength(6);
+    expect(result.rows.map((r) => r.Categoria)).toEqual(['CAT1', 'CAT1', 'CAT2', 'CAT2', 'CAT3', 'CAT3']);
+    expect(result.notices.some((n) => n.includes('sem nenhum veterinário nomeado'))).toBe(true);
   });
 });

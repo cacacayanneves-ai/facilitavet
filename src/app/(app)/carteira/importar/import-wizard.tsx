@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import * as React from 'react';
-import { AlertTriangle, Check, FileSpreadsheet, MapPin, Upload } from 'lucide-react';
+import { AlertTriangle, Check, Download, FileSpreadsheet, MapPin, Upload } from 'lucide-react';
 import {
   Alert,
   Badge,
@@ -391,8 +391,17 @@ function UploadStep({ onFile, busy }: { onFile: (file: File) => void; busy: bool
           <p className="mt-1">
             No mínimo <strong>nome</strong> e <strong>categoria</strong> (Cat 1 / Cat 2 / Cat 3).
             Endereço, bairro, cidade e CEP melhoram muito a localização, porque nome e bairro sozinhos
-            frequentemente não bastam para encontrar o endereço exato.
+            frequentemente não bastam para encontrar o endereço exato. Também aceitamos uma linha por
+            veterinário, com a categoria sendo o nome da aba (CAT 1, CAT 2, CAT 3).
           </p>
+          <a
+            href="/exemplo-carteira-facilitavet.xlsx"
+            download
+            className="mt-3 inline-flex items-center gap-1.5 text-[11px] font-medium text-brand-600 hover:text-brand-700 hover:underline"
+          >
+            <Download className="size-3.5" />
+            Baixar planilha de exemplo
+          </a>
         </div>
       </CardContent>
     </Card>

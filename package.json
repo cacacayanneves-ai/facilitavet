@@ -20,7 +20,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "demo:plan": "tsx scripts/demo-plan.ts",
-    "db:setup": "prisma migrate deploy && tsx prisma/seed.ts && tsx scripts/demo-plan.ts"
+    "db:setup": "prisma migrate deploy && tsx prisma/seed.ts && tsx scripts/demo-plan.ts",
+    "example:spreadsheet": "tsx scripts/generate-example-spreadsheet.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
