@@ -13,6 +13,8 @@ export interface RouteMessageStop {
   time: string;
   clinicName: string;
   neighborhood: string | null;
+  /** Visitas (veterinarios) contabilizadas nesta parada. */
+  veterinarians: number;
 }
 
 export interface RouteMessageInput {
@@ -45,14 +47,20 @@ export function buildRouteMessage(input: RouteMessageInput): string {
   lines.push('☀️ Bom dia! Seu roteiro de hoje está pronto.');
   lines.push('');
   lines.push(`📅 ${weekday}, ${dateLabel}`);
-  lines.push(`${input.stops.length} visita${input.stops.length === 1 ? '' : 's'} programada${input.stops.length === 1 ? '' : 's'}`);
+  const totalVisits = input.stops.reduce((sum, s) => sum + s.veterinarians, 0);
+  lines.push(
+    totalVisits > input.stops.length
+      ? `${input.stops.length} clínica${input.stops.length === 1 ? '' : 's'} · ${totalVisits} visitas programadas`
+      : `${input.stops.length} visita${input.stops.length === 1 ? '' : 's'} programada${input.stops.length === 1 ? '' : 's'}`,
+  );
 
   if (input.include.route && input.stops.length > 0) {
     lines.push('');
     for (const stop of input.stops) {
       const marker = NUMBER_EMOJI[stop.sequence] ?? `${stop.sequence}.`;
       const time = input.include.times ? `${stop.time} — ` : '';
-      lines.push(`${marker} ${time}${stop.clinicName}`);
+      const vetsSuffix = stop.veterinarians > 1 ? ` (${stop.veterinarians} vets)` : '';
+      lines.push(`${marker} ${time}${stop.clinicName}${vetsSuffix}`);
       if (stop.neighborhood) lines.push(`📍 ${stop.neighborhood}`);
     }
   }

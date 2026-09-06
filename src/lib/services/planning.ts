@@ -5,6 +5,7 @@ import { getClaudeProvider } from '@/lib/providers/claude';
 import { getMapsProvider } from '@/lib/providers/maps';
 import {
   generatePlan,
+  splitVeterinarianCount,
   type PlannedRoute,
   type PlannerClinic,
   type PlannerResult,
@@ -70,10 +71,23 @@ export async function generateMonthlyPlan(options: GeneratePlanOptions): Promise
         status: 'COMPLETED',
         date: { gte: monthStart, lte: monthEnd },
       },
-      select: { clinicId: true },
+      select: { clinicId: true, veterinarians: true },
     });
-    const completedClinicIds = new Set(completedVisits.map((v) => v.clinicId));
-    const remainingTarget = Math.max(0, targetVisits - completedClinicIds.size);
+
+    // A meta conta VISITAS (veterinarios), entao o que ja foi entregue tambem
+    // precisa ser somado em veterinarios, nao em numero de clinicas — uma
+    // clinica com 5 veterinarios ja concluida vale 5, nao 1.
+    const completedVisitsTotal = completedVisits.reduce((sum, v) => sum + v.veterinarians, 0);
+    const remainingTarget = Math.max(0, targetVisits - completedVisitsTotal);
+
+    // Quantas PARTES de cada clinica ja foram concluidas neste mes — essencial
+    // para clinicas com visita dividida (secao de split visits): se a parte 1
+    // ja foi feita mas a parte 2 nao, a clinica nao pode ser excluida do
+    // replanejamento, apenas reduzida ao que falta.
+    const completedPartsByClinicId = new Map<string, number>();
+    for (const visit of completedVisits) {
+      completedPartsByClinicId.set(visit.clinicId, (completedPartsByClinicId.get(visit.clinicId) ?? 0) + 1);
+    }
 
     const [clinics, calendar] = await Promise.all([
       prisma.clinic.findMany({
@@ -88,6 +102,8 @@ export async function generateMonthlyPlan(options: GeneratePlanOptions): Promise
           longitude: true,
           priority: true,
           lastVisitedAt: true,
+          veterinarians: true,
+          visitSplits: true,
         },
       }),
       buildWorkCalendar({
@@ -103,18 +119,42 @@ export async function generateMonthlyPlan(options: GeneratePlanOptions): Promise
     ]);
 
     const plannerClinics: PlannerClinic[] = clinics
-      .filter((c) => !completedClinicIds.has(c.id))
-      .map((c) => ({
-      id: c.id,
-      name: c.name,
-      category: c.category as PlannerClinic['category'],
-      neighborhood: c.neighborhood,
-      city: c.city,
-      lat: c.latitude ?? Number.NaN,
-      lng: c.longitude ?? Number.NaN,
-      priority: c.priority,
-        lastVisitedAt: c.lastVisitedAt,
-      }));
+      .map((c): PlannerClinic | null => {
+        const totalParts = Math.max(1, Math.round(c.visitSplits || 1));
+        const completedParts = completedPartsByClinicId.get(c.id) ?? 0;
+        const remainingParts = totalParts - completedParts;
+
+        // Clinica com todas as partes ja concluidas neste mes: fora do
+        // replanejamento, senao a mesma visita seria criada de novo (era
+        // exatamente o bug corrigido nesta mesma base — visitas duplicadas).
+        if (remainingParts <= 0) return null;
+
+        // Clinica dividida com ALGUMAS partes ja concluidas: reduz ao que
+        // falta, preservando o tamanho de cada parte ja definido pela mesma
+        // divisao deterministica (os veterinarios remanescentes sao a soma
+        // das fatias ainda nao atendidas).
+        const veterinarians =
+          completedParts > 0
+            ? splitVeterinarianCount(c.veterinarians, totalParts)
+                .slice(completedParts)
+                .reduce((sum, share) => sum + share, 0)
+            : c.veterinarians;
+
+        return {
+          id: c.id,
+          name: c.name,
+          category: c.category as PlannerClinic['category'],
+          neighborhood: c.neighborhood,
+          city: c.city,
+          lat: c.latitude ?? Number.NaN,
+          lng: c.longitude ?? Number.NaN,
+          priority: c.priority,
+          lastVisitedAt: c.lastVisitedAt,
+          veterinarians,
+          visitSplits: remainingParts,
+        };
+      })
+      .filter((c): c is PlannerClinic => c !== null);
 
     const maps = getMapsProvider();
     const resolveMatrix = async (request: TravelMatrixRequest) => maps.travelMatrix(request);
@@ -132,9 +172,9 @@ export async function generateMonthlyPlan(options: GeneratePlanOptions): Promise
       settings.destinationLongitude,
     );
 
-    if (completedClinicIds.size > 0) {
+    if (completedPartsByClinicId.size > 0) {
       log.info('Replanejamento parcial', {
-        alreadyCompleted: completedClinicIds.size,
+        alreadyCompleted: completedVisitsTotal,
         remainingTarget,
       });
     }
@@ -271,6 +311,8 @@ async function persistPlan(args: {
           targetVisits,
           status: 'READY' as PlanStatus,
           requiredCategories: result.statistics.requiredCategories as Category[],
+          totalVisits: result.statistics.selectedVisits,
+          totalStops: result.statistics.selectedStops,
           totalDistanceMeters: result.statistics.totalDistanceMeters,
           totalDurationSeconds: result.statistics.totalDurationSeconds,
           averageScore: result.statistics.averageScore,
@@ -298,6 +340,8 @@ async function persistPlan(args: {
             destinationLabel: route.destinationLabel,
             destinationLatitude: route.destination?.lat ?? null,
             destinationLongitude: route.destination?.lng ?? null,
+            totalVisits: route.totalVisits,
+            totalStops: route.totalStops,
             totalDistanceMeters: route.totalDistanceMeters,
             totalDurationSeconds: route.totalDurationSeconds,
             score: route.score,
@@ -319,6 +363,9 @@ async function persistPlan(args: {
               category: stop.category as Category,
               status: 'PLANNED',
               sequence: stop.sequence,
+              veterinarians: stop.veterinarians,
+              part: stop.part,
+              totalParts: stop.totalParts,
               estimatedArrival: combineDateAndTime(route.date, stop.estimatedArrival),
             },
           });
@@ -329,6 +376,9 @@ async function persistPlan(args: {
               clinicId: stop.clinicId,
               visitId: visit.id,
               sequence: stop.sequence,
+              veterinarians: stop.veterinarians,
+              part: stop.part,
+              totalParts: stop.totalParts,
               estimatedArrival: combineDateAndTime(route.date, stop.estimatedArrival),
               estimatedDeparture: combineDateAndTime(route.date, stop.estimatedDeparture),
               distanceFromPreviousMeters: stop.distanceFromPreviousMeters,

@@ -59,17 +59,22 @@ export async function updateVisitStatus(args: {
 }
 
 export interface MonthProgress {
+  /** VISITAS (veterinarios) — a mesma unidade da meta mensal. */
   target: number;
   planned: number;
   completed: number;
   cancelled: number;
   remaining: number;
   progressPercent: number;
+  /** PARADAS (clinicas) — informativo, nao usado na matematica da meta. */
+  plannedStops: number;
+  completedStops: number;
   availableDays: number;
   plannedDays: number;
   averagePerDay: number;
   totalDistanceMeters: number;
   totalDurationSeconds: number;
+  /** Visitas por categoria. */
   perCategory: Record<'CAT1' | 'CAT2' | 'CAT3', number>;
 }
 
@@ -90,19 +95,28 @@ export async function getMonthProgress(args: {
 
   const visits = await prisma.visit.findMany({
     where: { userId: args.userId, date: { gte: start, lte: end } },
-    select: { status: true, category: true },
+    select: { status: true, category: true, veterinarians: true },
   });
 
+  // A meta conta VISITAS (veterinarios) — cada linha de Visit soma o proprio
+  // peso, nao 1 fixo. Uma clinica com 4 veterinarios entra com 4 aqui.
   const perCategory = { CAT1: 0, CAT2: 0, CAT3: 0 };
+  let planned = 0;
   let completed = 0;
   let cancelled = 0;
+  let plannedStops = 0;
+  let completedStops = 0;
   for (const visit of visits) {
-    perCategory[visit.category] += 1;
-    if (visit.status === 'COMPLETED') completed += 1;
-    if (visit.status === 'CANCELLED') cancelled += 1;
+    perCategory[visit.category] += visit.veterinarians;
+    planned += visit.veterinarians;
+    plannedStops += 1;
+    if (visit.status === 'COMPLETED') {
+      completed += visit.veterinarians;
+      completedStops += 1;
+    }
+    if (visit.status === 'CANCELLED') cancelled += visit.veterinarians;
   }
 
-  const planned = visits.length;
   const target = plan?.targetVisits ?? 0;
   const plannedDays = plan?.routes.length ?? 0;
 
@@ -113,6 +127,8 @@ export async function getMonthProgress(args: {
     cancelled,
     remaining: Math.max(0, target - completed),
     progressPercent: target > 0 ? Math.round((planned / target) * 100) : 0,
+    plannedStops,
+    completedStops,
     availableDays: args.availableDays,
     plannedDays,
     averagePerDay: plannedDays > 0 ? Math.round((planned / plannedDays) * 10) / 10 : 0,

@@ -1,0 +1,8 @@
+-- AlterTable
+ALTER TABLE "MonthlyPlan" ADD COLUMN     "totalStops" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "totalVisits" INTEGER NOT NULL DEFAULT 0;
+
+-- AlterTable
+ALTER TABLE "RouteStop" ADD COLUMN     "part" INTEGER NOT NULL DEFAULT 1,
+ADD COLUMN     "totalParts" INTEGER NOT NULL DEFAULT 1,
+ADD COLUMN     "veterinarians" INTEGER NOT NULL DEFAULT 1;

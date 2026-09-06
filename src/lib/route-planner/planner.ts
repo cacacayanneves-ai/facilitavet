@@ -1,12 +1,13 @@
 import { rebalanceByDensity, distributeDailyCapacity } from './balancing';
-import { balancedKMeans, orderClustersGeographically, type ClusterPoint } from './clustering';
+import { balancedKMeans, orderClustersGeographically, type CapacityBounds, type ClusterPoint } from './clustering';
 import { findCategoryOverlaps } from './category-cycle';
 import { evaluateFeasibility } from './feasibility';
 import { createProjection, estimateMatrix, haversineMeters } from './geo';
 import { buildSchedule, minutesToTime } from './schedule';
 import { scoreRoute } from './scoring';
-import { selectClinicsForMonth } from './selection';
+import { selectClinicsForMonth, visitWeightOf } from './selection';
 import { optimizeSequence, evaluate, type SequenceProblem } from './sequencing';
+import { expandSplitClinics, insertDeferredParts, realClinicId } from './split-visits';
 import type {
   CategoryCode,
   LatLng,
@@ -15,6 +16,7 @@ import type {
   PlannerClinic,
   PlannerInput,
   PlannerLogEntry,
+  PlannerPreferences,
   PlannerResult,
   PlannerWarning,
   TravelMatrix,
@@ -33,6 +35,15 @@ export interface PlannerRunOptions {
  *
  * Implementa as 15 etapas descritas na especificacao do produto. E puro:
  * entra `PlannerInput`, sai `PlannerResult`. Nao conhece banco, HTTP nem UI.
+ *
+ * REGRA CENTRAL DE NEGOCIO: a meta do propagandista conta VISITAS POR
+ * VETERINARIO, nao clinicas visitadas. Uma clinica com 3 veterinarios, numa
+ * unica parada, contabiliza 3 visitas. Isso atravessa o motor inteiro:
+ * selecao, capacidade diaria, distribuicao e score sao todos calculados em
+ * cima do peso `veterinarians` de cada clinica, nunca em cima da contagem de
+ * paradas. Alem disso, uma clinica pode ter sua visita DIVIDIDA em partes
+ * (`visitSplits`), cada parte num dia separado por pelo menos
+ * `minDaysBetweenSplitVisits` dias — ver `split-visits.ts`.
  *
  * Divisao de responsabilidades (regra de arquitetura do produto):
  *   - Google Maps  -> fatos do mundo (onde fica, quanto demora, quanto anda).
@@ -61,7 +72,7 @@ export async function generatePlan(
   const { preferences, categoryRules } = input;
 
   // -------------------------------------------------------------------------
-  // Etapa 1 — Selecionar clinicas obrigatorias do mes
+  // Etapa 1 — Selecionar clinicas obrigatorias do mes (por VISITAS/veterinarios)
   // -------------------------------------------------------------------------
   step(1, 'Analisando carteira');
   const selection = selectClinicsForMonth(
@@ -83,51 +94,73 @@ export async function generatePlan(
     if (overlaps.length > 0) {
       warnings.push({
         code: 'CATEGORY_OVERLAP',
-        message: `${overlaps.length} clinica(s) aparecem na carteira em mais de uma categoria. Uma clinica deve pertencer a apenas uma categoria.`,
+        message: `${overlaps.length} clínica(s) aparecem na carteira em mais de uma categoria. Uma clínica deve pertencer a apenas uma categoria.`,
         details: { overlaps: overlaps.slice(0, 20) },
       });
     }
   }
 
   // -------------------------------------------------------------------------
-  // Etapa 3 — Validar numero total de visitas / viabilidade
+  // Etapa 3 — Expandir clinicas divididas e validar viabilidade
   // -------------------------------------------------------------------------
-  step(3, 'Localizando clinicas');
-  const selected = selection.selected;
+  step(3, 'Localizando clínicas');
   const dayCount = input.availableDays.length;
-  const feasibility = evaluateFeasibility(
-    selected.length,
-    dayCount,
-    preferences.minVisitsPerDay,
-    preferences.maxVisitsPerDay,
-  );
 
-  if (!feasibility.feasible || selected.length === 0) {
+  // Clinicas com `visitSplits > 1` viram N pseudo-clinicas (uma por parte). A
+  // primeira parte entra no pool geografico normal; as demais sao inseridas
+  // depois, respeitando o intervalo minimo entre partes (ver split-visits.ts).
+  const expandedSplit = expandSplitClinics(selection.selected);
+  const allSelected = [...expandedSplit.pool, ...expandedSplit.deferred];
+
+  const feasibility = evaluateFeasibility({
+    requiredVisits: selection.totalVisits,
+    requiredStops: allSelected.length,
+    availableDays: dayCount,
+    minPerDay: preferences.minVisitsPerDay,
+    maxPerDay: preferences.maxVisitsPerDay,
+    clinics: allSelected,
+  });
+
+  if (!feasibility.feasible || allSelected.length === 0) {
     return {
       routes: [],
-      statistics: emptyStatistics(executionId, Date.now() - startedAt, selection.perCategory, selection.requiredCategories, selected.length),
+      statistics: emptyStatistics(
+        executionId,
+        Date.now() - startedAt,
+        selection.perCategory,
+        selection.requiredCategories,
+        selection.totalVisits,
+      ),
       warnings,
       feasibility,
-      unassignedClinicIds: selected.map((c) => c.id),
+      unassignedClinicIds: allSelected.map((c) => realClinicId(c.id)),
       skippedClinicIds: selection.skippedNoCoordinates,
     };
   }
 
   // -------------------------------------------------------------------------
-  // Etapas 4-8 — Coordenadas, regioes, grupos por dia e balanceamento
+  // Etapas 4-8 — Regioes, grupos por dia e balanceamento (em VISITAS)
   // -------------------------------------------------------------------------
-  step(4, 'Analisando regioes');
+  step(4, 'Analisando regiões');
 
   const baseCapacity = distributeDailyCapacity(
-    selected.length,
+    selection.totalVisits,
     dayCount,
     preferences.minVisitsPerDay,
     preferences.maxVisitsPerDay,
   );
   warnings.push(...baseCapacity.warnings);
 
-  const points: ClusterPoint[] = selected.map((c) => ({ id: c.id, lat: c.lat, lng: c.lng }));
-  const clinicById = new Map(selected.map((c) => [c.id, c]));
+  // O pool geografico contem clinicas normais + a 1a parte de cada clinica
+  // dividida. As demais partes (`expandedSplit.deferred`) sao inseridas
+  // depois que os dias ja tem uma geografia definida (ver buildSolution).
+  const points: ClusterPoint[] = expandedSplit.pool.map((c) => ({
+    id: c.id,
+    lat: c.lat,
+    lng: c.lng,
+    weight: visitWeightOf(c),
+  }));
+  const clinicById = new Map(allSelected.map((c) => [c.id, c]));
 
   // -------------------------------------------------------------------------
   // Etapas 9-15 — Gera varias solucoes candidatas e escolhe a melhor
@@ -140,11 +173,17 @@ export async function generatePlan(
   step(6, 'Criando grupos');
 
   for (const strategy of strategies) {
-    const capacities = strategy.densityAware
+    const targets = strategy.densityAware
       ? densityAwareCapacities(points, baseCapacity.capacities, preferences, strategy.seed)
       : baseCapacity.capacities;
 
-    const clustering = balancedKMeans(points, capacities, strategy.seed, strategy.restarts);
+    const bounds: CapacityBounds = {
+      targets,
+      min: preferences.minVisitsPerDay,
+      max: preferences.maxVisitsPerDay,
+    };
+
+    const clustering = balancedKMeans(points, bounds, strategy.seed, strategy.restarts);
     candidates.push({
       strategy: strategy.name,
       seed: strategy.seed,
@@ -164,13 +203,14 @@ export async function generatePlan(
       candidate,
       points,
       clinicById,
+      deferred: expandedSplit.deferred,
       input,
       matrixState,
     });
     evaluated.push(solution);
   }
 
-  step(8, 'Comparando solucoes');
+  step(8, 'Comparando soluções');
 
   evaluated.sort((a, b) => {
     // Criterio primario: score medio (maior e melhor). Empate: menor distancia.
@@ -180,11 +220,15 @@ export async function generatePlan(
 
   const best = evaluated[0];
 
+  for (const w of best.splitWarnings) {
+    warnings.push({ code: 'SPLIT_SEPARATION_UNMET', message: w.message, details: { groupId: w.groupId } });
+  }
+
   // -------------------------------------------------------------------------
   // Comparacao com a linha de base (secao 34/67): so mostramos economia quando
   // ela foi realmente calculada. Nunca inventamos estatistica.
   // -------------------------------------------------------------------------
-  const baseline = computeBaseline(selected, baseCapacity.capacities, input);
+  const baseline = computeBaseline(allSelected, baseCapacity.capacities, input);
   const distanceSavingPercent =
     baseline.totalDistanceMeters > 0
       ? Math.round(
@@ -193,17 +237,21 @@ export async function generatePlan(
         ) / 10
       : 0;
 
-  step(9, 'Finalizando calendario');
+  step(9, 'Finalizando calendário');
 
   if (matrixState.estimated) {
     warnings.push({
       code: 'MATRIX_FALLBACK',
       message:
-        'As distancias e os tempos sao estimativas geometricas calibradas. Configure a Google Routes API para obter dados reais de rota e transito.',
+        'As distâncias e os tempos são estimativas geométricas calibradas. Configure a Google Routes API para obter dados reais de rota e trânsito.',
     });
   }
 
   const durationMs = Date.now() - startedAt;
+  const plannedDays = best.routes.filter((r) => r.stops.length > 0).length;
+
+  const perCategoryStops: Record<CategoryCode, number> = { CAT1: 0, CAT2: 0, CAT3: 0 };
+  for (const clinic of allSelected) perCategoryStops[clinic.category] += 1;
 
   return {
     routes: best.routes,
@@ -215,14 +263,14 @@ export async function generatePlan(
       executionId,
       durationMs,
       strategy: best.strategy,
-      selectedVisits: selected.length,
+      selectedVisits: selection.totalVisits,
+      selectedStops: allSelected.length,
       requiredCategories: selection.requiredCategories,
       perCategory: selection.perCategory,
-      plannedDays: best.routes.filter((r) => r.stops.length > 0).length,
-      averageVisitsPerDay:
-        best.routes.length > 0
-          ? Math.round((selected.length / best.routes.filter((r) => r.stops.length > 0).length) * 100) / 100
-          : 0,
+      perCategoryStops,
+      plannedDays,
+      averageVisitsPerDay: plannedDays > 0 ? Math.round((selection.totalVisits / plannedDays) * 100) / 100 : 0,
+      averageStopsPerDay: plannedDays > 0 ? Math.round((allSelected.length / plannedDays) * 100) / 100 : 0,
       totalDistanceMeters: best.totalDistanceMeters,
       totalDurationSeconds: best.totalDurationSeconds,
       averageScore: Math.round(best.averageScore * 10) / 10,
@@ -265,6 +313,7 @@ interface EvaluatedSolution {
   totalDistanceMeters: number;
   totalDurationSeconds: number;
   averageScore: number;
+  splitWarnings: Array<{ groupId: string; message: string }>;
 }
 
 interface MatrixState {
@@ -291,16 +340,21 @@ function buildStrategies(count: number, seed: number) {
 
 /**
  * Ajusta a capacidade de cada dia a densidade da regiao que ele recebeu.
- * Roda um clustering exploratorio, mede quantas clinicas caem em cada regiao
+ * Roda um clustering exploratorio, mede quantas visitas caem em cada regiao
  * e redistribui as vagas dentro dos limites min/max, mantendo o total exato.
  */
 function densityAwareCapacities(
   points: ClusterPoint[],
   baseCapacities: number[],
-  preferences: PlannerInput['preferences'],
+  preferences: PlannerPreferences,
   seed: number,
 ): number[] {
-  const probe = balancedKMeans(points, baseCapacities, seed, 3);
+  const bounds: CapacityBounds = {
+    targets: baseCapacities,
+    min: preferences.minVisitsPerDay,
+    max: preferences.maxVisitsPerDay,
+  };
+  const probe = balancedKMeans(points, bounds, seed, 3);
   const weights = probe.clusters.map((members, i) => {
     if (members.length === 0) return 1;
     const centroid = probe.centroids[i];
@@ -328,20 +382,43 @@ async function buildSolution(args: {
   candidate: SolutionCandidate;
   points: ClusterPoint[];
   clinicById: Map<string, PlannerClinic>;
+  deferred: PlannerClinic[];
   input: PlannerInput;
   matrixState: MatrixState;
 }): Promise<EvaluatedSolution> {
-  const { candidate, points, clinicById, input, matrixState } = args;
+  const { candidate, points, clinicById, deferred, input, matrixState } = args;
   const { availableDays, origin, destination, preferences } = input;
 
   const projection = createProjection(points);
   const originProjected = origin ? projection.project(origin) : null;
   const clusterOrder = orderClustersGeographically(candidate.centroids, originProjected);
 
-  // Meta ideal por dia: e contra ELA que o score mede desequilibrio. Comparar
-  // o dia com ele mesmo zeraria o termo `balance` e o motor aceitaria de graca
-  // um dia com 9 visitas ao lado de varios com 4.
-  const idealStopsPerDay = availableDays.length > 0 ? points.length / availableDays.length : 0;
+  // Insere as partes adiadas de clinicas divididas, agora que cada dia ja tem
+  // uma data real (via clusterOrder) para checar o intervalo minimo entre
+  // partes de uma mesma clinica.
+  const weights = points.map((p) => p.weight);
+  const inserted = insertDeferredParts({
+    clusters: candidate.clusters,
+    clusterOrder,
+    points,
+    weights,
+    centroids: candidate.centroids,
+    availableDays,
+    deferred,
+    minDaysBetweenSplitVisits: preferences.minDaysBetweenSplitVisits,
+    maxPerDay: preferences.maxVisitsPerDay,
+    project: (p) => projection.project(p),
+  });
+
+  const finalPoints = inserted.points;
+  const finalWeights = inserted.weights;
+  const clusters = inserted.clusters;
+
+  // Meta ideal por dia, em VISITAS: e contra ela que o score mede
+  // desequilibrio. Comparar o dia com ele mesmo zeraria o termo `balance` e o
+  // motor aceitaria de graca um dia com 20 visitas ao lado de varios com 6.
+  const totalWeight = finalWeights.reduce((sum, w) => sum + w, 0);
+  const idealVisitsPerDay = availableDays.length > 0 ? totalWeight / availableDays.length : 0;
 
   const routes: PlannedRoute[] = [];
   let totalDistanceMeters = 0;
@@ -356,9 +433,9 @@ async function buildSolution(args: {
   for (let dayIndex = 0; dayIndex < availableDays.length; dayIndex += 1) {
     const day = availableDays[dayIndex];
     const clusterIndex = clusterOrder[dayIndex];
-    const members = clusterIndex === undefined ? [] : candidate.clusters[clusterIndex] ?? [];
+    const members = clusterIndex === undefined ? [] : clusters[clusterIndex] ?? [];
     const dayClinics = members
-      .map((index) => clinicById.get(points[index].id))
+      .map((index) => clinicById.get(finalPoints[index].id))
       .filter((c): c is PlannerClinic => Boolean(c));
 
     const route = await buildDayRoute({
@@ -368,7 +445,7 @@ async function buildSolution(args: {
       destination,
       input,
       matrixState,
-      targetStops: idealStopsPerDay,
+      targetVisits: idealVisitsPerDay,
     });
 
     routes.push(route);
@@ -382,8 +459,6 @@ async function buildSolution(args: {
     }
   }
 
-  void preferences;
-
   return {
     strategy: candidate.strategy,
     seed: candidate.seed,
@@ -391,6 +466,7 @@ async function buildSolution(args: {
     totalDistanceMeters,
     totalDurationSeconds,
     averageScore: scoredDays > 0 ? scoreSum / scoredDays : 0,
+    splitWarnings: inserted.warnings,
   };
 }
 
@@ -401,9 +477,9 @@ async function buildDayRoute(args: {
   destination: LatLng | null;
   input: PlannerInput;
   matrixState: MatrixState;
-  targetStops: number;
+  targetVisits: number;
 }): Promise<PlannedRoute> {
-  const { date, clinics, origin, destination, input, matrixState, targetStops } = args;
+  const { date, clinics, origin, destination, input, matrixState, targetVisits } = args;
   const { preferences } = input;
 
   if (clinics.length === 0) {
@@ -414,6 +490,8 @@ async function buildDayRoute(args: {
       destinationLabel: input.destination?.label ?? null,
       destination,
       stops: [],
+      totalVisits: 0,
+      totalStops: 0,
       totalDistanceMeters: 0,
       totalDurationSeconds: 0,
       score: 0,
@@ -485,21 +563,31 @@ async function buildDayRoute(args: {
     totalDuration += matrix.durations[previous][endIndex];
   }
 
-  const schedule = buildSchedule(legDurations, {
-    workStartTime: preferences.workStartTime,
-    workEndTime: preferences.workEndTime,
-    lunchStart: preferences.lunchStart,
-    lunchEnd: preferences.lunchEnd,
-    visitDurationMinutes: preferences.visitDurationMinutes,
-    bufferMinutes: preferences.bufferMinutes,
-  });
-
   const orderedClinics = order.map((nodeIndex) => clinics[stopIndices.indexOf(nodeIndex)]);
 
+  const schedule = buildSchedule(
+    orderedClinics.map((clinic, i) => ({
+      travelSeconds: legDurations[i],
+      veterinarians: visitWeightOf(clinic),
+    })),
+    {
+      workStartTime: preferences.workStartTime,
+      workEndTime: preferences.workEndTime,
+      lunchStart: preferences.lunchStart,
+      lunchEnd: preferences.lunchEnd,
+      visitDurationMinutes: preferences.visitDurationMinutes,
+      minutesPerExtraVeterinarian: preferences.minutesPerExtraVeterinarian,
+      bufferMinutes: preferences.bufferMinutes,
+    },
+  );
+
   const stops: PlannedStop[] = orderedClinics.map((clinic, i) => ({
-    clinicId: clinic.id,
+    clinicId: realClinicId(clinic.id),
     clinicName: clinic.name,
     category: clinic.category,
+    veterinarians: visitWeightOf(clinic),
+    part: clinic.splitPart ?? 1,
+    totalParts: clinic.splitTotal ?? 1,
     neighborhood: clinic.neighborhood ?? null,
     lat: clinic.lat,
     lng: clinic.lng,
@@ -510,13 +598,16 @@ async function buildDayRoute(args: {
     durationFromPreviousSeconds: Math.round(legDurations[i]),
   }));
 
+  const totalVisits = orderedClinics.reduce((sum, c) => sum + visitWeightOf(c), 0);
+
   const breakdown = scoreRoute({
     origin,
     destination,
     stops: stops.map((s) => ({ lat: s.lat, lng: s.lng })),
     totalDistanceMeters: Math.round(totalDistance),
     totalDurationSeconds: Math.round(totalDuration),
-    targetStops,
+    totalVisits,
+    targetVisits,
     weights: preferences.scoreWeights,
     estimated: matrix.estimated,
   });
@@ -528,6 +619,8 @@ async function buildDayRoute(args: {
     destinationLabel: input.destination?.label ?? null,
     destination,
     stops,
+    totalVisits,
+    totalStops: stops.length,
     totalDistanceMeters: Math.round(totalDistance),
     totalDurationSeconds: Math.round(totalDuration),
     score: breakdown.score,
@@ -594,10 +687,11 @@ function buildRegionLabel(clinics: PlannerClinic[]): string {
  *
  * Simula o que o profissional faria sem o produto: dividir a carteira pelos
  * dias na ordem em que ela esta (ordem alfabetica/planilha) e visitar na
- * mesma ordem. E o cenario real de quem usa planilha — nao um espantalho.
- * Usa a MESMA funcao de estimativa das rotas otimizadas, entao a comparacao
- * e coerente. Se a comparacao nao puder ser feita, o produto nao mostra
- * numero de economia (secao 34).
+ * mesma ordem, acumulando VISITAS (nao clinicas) ate a meta de cada dia. E o
+ * cenario real de quem usa planilha — nao um espantalho. Usa a MESMA funcao
+ * de estimativa das rotas otimizadas, entao a comparacao e coerente. Se a
+ * comparacao nao puder ser feita, o produto nao mostra numero de economia
+ * (secao 34).
  */
 function computeBaseline(
   clinics: PlannerClinic[],
@@ -610,9 +704,19 @@ function computeBaseline(
   let totalDuration = 0;
 
   for (const capacity of capacities) {
-    const dayClinics = ordered.slice(cursor, cursor + capacity);
-    cursor += capacity;
-    if (dayClinics.length === 0) continue;
+    if (cursor >= ordered.length) break;
+
+    const dayClinics: PlannerClinic[] = [];
+    let load = 0;
+    // Acumula VISITAS (nao clinicas) ate atingir o alvo do dia. Sempre
+    // inclui pelo menos uma clinica, mesmo que sozinha ja ultrapasse o alvo —
+    // clinicas sao atomicas, tambem na vida real de quem usa planilha.
+    while (cursor < ordered.length && (load === 0 || load < capacity)) {
+      const next = ordered[cursor];
+      dayClinics.push(next);
+      load += visitWeightOf(next);
+      cursor += 1;
+    }
 
     const nodes: LatLng[] = [];
     if (input.origin) nodes.push(input.origin);
@@ -641,10 +745,13 @@ function emptyStatistics(
     durationMs,
     strategy: 'none',
     selectedVisits,
+    selectedStops: 0,
     requiredCategories,
     perCategory,
+    perCategoryStops: { CAT1: 0, CAT2: 0, CAT3: 0 },
     plannedDays: 0,
     averageVisitsPerDay: 0,
+    averageStopsPerDay: 0,
     totalDistanceMeters: 0,
     totalDurationSeconds: 0,
     averageScore: 0,
@@ -665,7 +772,7 @@ export async function recalculateRoute(args: {
   input: Pick<PlannerInput, 'preferences' | 'origin' | 'destination' | 'resolveMatrix'>;
   /** Quando true respeita a ordem informada; quando false reotimiza. */
   keepOrder: boolean;
-  targetStops?: number;
+  targetVisits?: number;
 }): Promise<PlannedRoute> {
   const matrixState: MatrixState = { provider: 'offline-geometric', elements: 0, estimated: true };
   const fullInput = {
@@ -678,6 +785,8 @@ export async function recalculateRoute(args: {
     categoryRules: null as never,
   } as unknown as PlannerInput;
 
+  const defaultTargetVisits = args.clinics.reduce((sum, c) => sum + visitWeightOf(c), 0);
+
   if (!args.keepOrder) {
     return buildDayRoute({
       date: args.date,
@@ -686,7 +795,7 @@ export async function recalculateRoute(args: {
       destination: args.destination,
       input: fullInput,
       matrixState,
-      targetStops: args.targetStops ?? args.clinics.length,
+      targetVisits: args.targetVisits ?? defaultTargetVisits,
     });
   }
 
@@ -698,7 +807,7 @@ export async function recalculateRoute(args: {
     destination: args.destination,
     input: fullInput,
     matrixState,
-    targetStops: args.targetStops ?? args.clinics.length,
+    targetVisits: args.targetVisits ?? defaultTargetVisits,
   });
   return route;
 }
@@ -710,9 +819,9 @@ async function buildDayRouteFixedOrder(args: {
   destination: LatLng | null;
   input: PlannerInput;
   matrixState: MatrixState;
-  targetStops: number;
+  targetVisits: number;
 }): Promise<PlannedRoute> {
-  const { date, clinics, origin, destination, input, matrixState, targetStops } = args;
+  const { date, clinics, origin, destination, input, matrixState, targetVisits } = args;
   const { preferences } = input;
 
   if (clinics.length === 0) {
@@ -759,19 +868,26 @@ async function buildDayRouteFixedOrder(args: {
     totalDuration += matrix.durations[previous][endIndex];
   }
 
-  const schedule = buildSchedule(legDurations, {
-    workStartTime: preferences.workStartTime,
-    workEndTime: preferences.workEndTime,
-    lunchStart: preferences.lunchStart,
-    lunchEnd: preferences.lunchEnd,
-    visitDurationMinutes: preferences.visitDurationMinutes,
-    bufferMinutes: preferences.bufferMinutes,
-  });
+  const schedule = buildSchedule(
+    clinics.map((clinic, i) => ({ travelSeconds: legDurations[i], veterinarians: visitWeightOf(clinic) })),
+    {
+      workStartTime: preferences.workStartTime,
+      workEndTime: preferences.workEndTime,
+      lunchStart: preferences.lunchStart,
+      lunchEnd: preferences.lunchEnd,
+      visitDurationMinutes: preferences.visitDurationMinutes,
+      minutesPerExtraVeterinarian: preferences.minutesPerExtraVeterinarian,
+      bufferMinutes: preferences.bufferMinutes,
+    },
+  );
 
   const stops: PlannedStop[] = clinics.map((clinic, i) => ({
-    clinicId: clinic.id,
+    clinicId: realClinicId(clinic.id),
     clinicName: clinic.name,
     category: clinic.category,
+    veterinarians: visitWeightOf(clinic),
+    part: clinic.splitPart ?? 1,
+    totalParts: clinic.splitTotal ?? 1,
     neighborhood: clinic.neighborhood ?? null,
     lat: clinic.lat,
     lng: clinic.lng,
@@ -782,13 +898,16 @@ async function buildDayRouteFixedOrder(args: {
     durationFromPreviousSeconds: Math.round(legDurations[i]),
   }));
 
+  const totalVisits = clinics.reduce((sum, c) => sum + visitWeightOf(c), 0);
+
   const breakdown = scoreRoute({
     origin,
     destination,
     stops: stops.map((s) => ({ lat: s.lat, lng: s.lng })),
     totalDistanceMeters: Math.round(totalDistance),
     totalDurationSeconds: Math.round(totalDuration),
-    targetStops,
+    totalVisits,
+    targetVisits,
     weights: preferences.scoreWeights,
     estimated: matrix.estimated,
   });
@@ -800,6 +919,8 @@ async function buildDayRouteFixedOrder(args: {
     destinationLabel: input.destination?.label ?? null,
     destination,
     stops,
+    totalVisits,
+    totalStops: stops.length,
     totalDistanceMeters: Math.round(totalDistance),
     totalDurationSeconds: Math.round(totalDuration),
     score: breakdown.score,

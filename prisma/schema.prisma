@@ -145,6 +145,14 @@ model UserSettings {
   visitDurationMinutes Int @default(30)
   bufferMinutes        Int @default(5)
 
+  /// Minutos adicionais por veterinario alem do primeiro. Uma clinica com 3
+  /// veterinarios ocupa visitDurationMinutes + 2 * minutesPerExtraVeterinarian.
+  minutesPerExtraVeterinarian Int @default(10)
+
+  /// Intervalo minimo, em dias, entre as partes da visita de uma mesma clinica.
+  /// Padrao 7 = pelo menos uma semana.
+  minDaysBetweenSplitVisits Int @default(7)
+
   // Origem / destino
   originType           AnchorType @default(HOME)
   originAddress        String?
@@ -155,10 +163,10 @@ model UserSettings {
   destinationLatitude  Float?
   destinationLongitude Float?
 
-  // Meta e limites
-  monthlyTarget   Int @default(100)
-  minVisitsPerDay Int @default(4)
-  maxVisitsPerDay Int @default(9)
+  // Meta e limites — TODOS contados em VISITAS (veterinarios), nao em clinicas.
+  monthlyTarget   Int @default(160)
+  minVisitsPerDay Int @default(6)
+  maxVisitsPerDay Int @default(14)
 
   // Regras comerciais (CategoryRuleSet serializado) e pesos do score
   categoryRules Json
@@ -195,8 +203,28 @@ model Clinic {
   organizationId String
   externalRef    String?
 
-  name         String
-  category     Category
+  name     String
+  category Category
+
+  /// Numero de veterinarios atendidos nesta clinica.
+  ///
+  /// REGRA COMERCIAL CENTRAL: a meta do propagandista conta VISITAS POR
+  /// VETERINARIO, nao paradas. Uma clinica com 3 veterinarios vale 3 visitas
+  /// numa unica passagem. Por isso este campo participa de toda a matematica
+  /// de planejamento — selecao, capacidade diaria e indicadores.
+  veterinarians Int @default(1)
+
+  /// Em quantas PARTES a visita desta clinica deve ser dividida.
+  ///
+  /// Clinicas com muitos veterinarios nao cabem numa conversa so: o
+  /// propagandista prefere voltar noutro dia e falar com o restante. Marcado
+  /// clinica a clinica — e uma decisao comercial, nao uma consequencia
+  /// automatica do numero de veterinarios.
+  ///
+  /// As partes sao agendadas em dias diferentes, separadas por pelo menos
+  /// `UserSettings.minDaysBetweenSplitVisits` dias.
+  visitSplits Int @default(1)
+
   address      String?
   neighborhood String?
   city         String?
@@ -248,6 +276,11 @@ model MonthlyPlan {
   // Categorias efetivamente exigidas neste mes (resultado do ciclo configurado)
   requiredCategories Category[]
 
+  /// Total de VISITAS (veterinarios) efetivamente planejadas no mes.
+  totalVisits Int @default(0)
+  /// Total de PARADAS (clinicas) efetivamente planejadas no mes.
+  totalStops  Int @default(0)
+
   totalDistanceMeters  Int   @default(0)
   totalDurationSeconds Int   @default(0)
   averageScore         Float @default(0)
@@ -282,6 +315,10 @@ model Route {
   destinationLatitude  Float?
   destinationLongitude Float?
 
+  /// Visitas (veterinarios) e paradas (clinicas) do dia.
+  totalVisits Int @default(0)
+  totalStops  Int @default(0)
+
   totalDistanceMeters  Int   @default(0)
   totalDurationSeconds Int   @default(0)
   score                Float @default(0)
@@ -314,6 +351,12 @@ model RouteStop {
   visitId  String? @unique
 
   sequence                    Int
+  /// Parte da visita desta clinica (ver Clinic.visitSplits): 1 de 1 quando
+  /// nao dividida, ou 1 de 2 / 2 de 2 quando dividida.
+  part                        Int       @default(1)
+  totalParts                  Int       @default(1)
+  /// Visitas (veterinarios) que esta parada contabiliza.
+  veterinarians               Int       @default(1)
   estimatedArrival            DateTime?
   estimatedDeparture          DateTime?
   distanceFromPreviousMeters  Int       @default(0)
@@ -340,6 +383,17 @@ model Visit {
   category Category
   status   VisitStatus @default(PLANNED)
   sequence Int         @default(0)
+
+  /// Quantos veterinarios esta parada contabilizou.
+  ///
+  /// Gravado no momento do planejamento, e nao lido da clinica na hora de
+  /// somar: se a clinica contratar um veterinario no mes que vem, o historico
+  /// do mes passado nao pode mudar retroativamente.
+  veterinarians Int @default(1)
+
+  /// Parte da visita, para clinicas com visita dividida (1 de 2, 2 de 2).
+  part       Int @default(1)
+  totalParts Int @default(1)
 
   estimatedArrival DateTime?
   completedAt      DateTime?

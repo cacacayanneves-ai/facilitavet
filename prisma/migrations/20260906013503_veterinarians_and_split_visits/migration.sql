@@ -1,0 +1,19 @@
+-- AlterTable
+ALTER TABLE "Clinic" ADD COLUMN     "veterinarians" INTEGER NOT NULL DEFAULT 1,
+ADD COLUMN     "visitSplits" INTEGER NOT NULL DEFAULT 1;
+
+-- AlterTable
+ALTER TABLE "Route" ADD COLUMN     "totalStops" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "totalVisits" INTEGER NOT NULL DEFAULT 0;
+
+-- AlterTable
+ALTER TABLE "UserSettings" ADD COLUMN     "minDaysBetweenSplitVisits" INTEGER NOT NULL DEFAULT 7,
+ADD COLUMN     "minutesPerExtraVeterinarian" INTEGER NOT NULL DEFAULT 10,
+ALTER COLUMN "monthlyTarget" SET DEFAULT 160,
+ALTER COLUMN "minVisitsPerDay" SET DEFAULT 6,
+ALTER COLUMN "maxVisitsPerDay" SET DEFAULT 14;
+
+-- AlterTable
+ALTER TABLE "Visit" ADD COLUMN     "part" INTEGER NOT NULL DEFAULT 1,
+ADD COLUMN     "totalParts" INTEGER NOT NULL DEFAULT 1,
+ADD COLUMN     "veterinarians" INTEGER NOT NULL DEFAULT 1;

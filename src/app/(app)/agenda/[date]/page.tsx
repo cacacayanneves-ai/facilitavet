@@ -55,6 +55,8 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
     id: route.id,
     date,
     regionLabel: route.regionLabel,
+    totalVisits: route.totalVisits,
+    totalStops: route.totalStops,
     totalDistanceMeters: route.totalDistanceMeters,
     totalDurationSeconds: route.totalDurationSeconds,
     score: route.score,
@@ -87,6 +89,9 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
       durationFromPreviousSeconds: stop.durationFromPreviousSeconds,
       visitId: stop.visit?.id ?? null,
       status: stop.visit?.status ?? 'PLANNED',
+      veterinarians: stop.veterinarians,
+      part: stop.part,
+      totalParts: stop.totalParts,
     })),
   };
 

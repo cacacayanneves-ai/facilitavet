@@ -2,7 +2,7 @@ import { requireUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { buildWorkCalendar } from '@/lib/services/calendar';
 import { parseCategoryRules } from '@/lib/services/settings';
-import { categoryForecast, evaluateFeasibility } from '@/lib/route-planner';
+import { categoryForecast, evaluateFeasibility, expandSplitClinics, type PlannerClinic } from '@/lib/route-planner';
 import { Topbar } from '@/components/layout/topbar';
 import { PlanningWorkspace } from './planning-workspace';
 
@@ -24,7 +24,7 @@ export default async function PlanningPage({
 
   const rules = parseCategoryRules(settings.categoryRules);
 
-  const [calendar, plan, clinicCounts, locatedCount] = await Promise.all([
+  const [calendar, plan, clinicStats, activeClinics] = await Promise.all([
     buildWorkCalendar({
       userId: user.id,
       organizationId: user.organizationId,
@@ -36,18 +36,22 @@ export default async function PlanningPage({
       city: settings.city,
     }),
     prisma.monthlyPlan.findUnique({ where: { userId_year_month: { userId: user.id, year, month } } }),
+    // Contagem de CLINICAS por categoria (exibida na tela) — nao confundir com
+    // visitas: a meta e a viabilidade contam veterinarios, computados abaixo.
     prisma.clinic.groupBy({
       by: ['category'],
       where: { organizationId: user.organizationId, active: true },
       _count: true,
+      _sum: { veterinarians: true },
     }),
-    prisma.clinic.count({
+    prisma.clinic.findMany({
       where: {
         organizationId: user.organizationId,
         active: true,
         latitude: { not: null },
         longitude: { not: null },
       },
+      select: { id: true, name: true, category: true, veterinarians: true, visitSplits: true },
     }),
   ]);
 
@@ -55,22 +59,46 @@ export default async function PlanningPage({
   const forecast = categoryForecast(rules, year, month, 6);
   const requiredCategories = forecast[0].categories;
 
-  // Quantas visitas o mes realmente EXIGE, dado o ciclo e o tamanho da carteira.
-  const byCategory = Object.fromEntries(clinicCounts.map((c) => [c.category, c._count])) as Record<string, number>;
+  // Clinicas por categoria (exibicao) e visitas (veterinarios) disponiveis por
+  // categoria (matematica da meta) — sao numeros diferentes de proposito.
+  const byCategory = Object.fromEntries(clinicStats.map((c) => [c.category, c._count])) as Record<string, number>;
+  const visitsByCategory = Object.fromEntries(
+    clinicStats.map((c) => [c.category, c._sum.veterinarians ?? 0]),
+  ) as Record<string, number>;
+
   const requiredVisits = Math.min(
     settings.monthlyTarget,
     requiredCategories.reduce(
-      (sum, category) => sum + Math.min(rules.rules[category]?.targetCount ?? 0, byCategory[category] ?? 0),
+      (sum, category) => sum + Math.min(rules.rules[category]?.targetCount ?? 0, visitsByCategory[category] ?? 0),
       0,
     ),
   );
 
-  const feasibility = evaluateFeasibility(
-    Math.max(requiredVisits, Math.min(settings.monthlyTarget, locatedCount)),
+  // Roda a MESMA verificacao de viabilidade do motor (incluindo o caso de
+  // clinicas cujo numero de veterinarios sozinho estoura o limite diario),
+  // para que esta previa nunca diga "viavel" quando o planejamento real nao
+  // conseguiria gerar o mes.
+  const eligibleClinics: PlannerClinic[] = activeClinics
+    .filter((c) => requiredCategories.includes(c.category))
+    .map((c) => ({
+      id: c.id,
+      name: c.name,
+      category: c.category,
+      veterinarians: c.veterinarians,
+      visitSplits: c.visitSplits,
+      lat: 0,
+      lng: 0,
+    }));
+  const expanded = expandSplitClinics(eligibleClinics);
+
+  const feasibility = evaluateFeasibility({
+    requiredVisits,
+    requiredStops: expanded.pool.length + expanded.deferred.length,
     availableDays,
-    settings.minVisitsPerDay,
-    settings.maxVisitsPerDay,
-  );
+    minPerDay: settings.minVisitsPerDay,
+    maxPerDay: settings.maxVisitsPerDay,
+    clinics: [...expanded.pool, ...expanded.deferred],
+  });
 
   return (
     <>
@@ -86,7 +114,7 @@ export default async function PlanningPage({
           availableDays={availableDays}
           forecast={forecast}
           clinicsByCategory={byCategory}
-          locatedCount={locatedCount}
+          locatedCount={activeClinics.reduce((sum, c) => sum + c.veterinarians, 0)}
           categoryTargets={{
             CAT1: rules.rules.CAT1.targetCount,
             CAT2: rules.rules.CAT2.targetCount,

@@ -54,6 +54,8 @@ export default async function ClinicsPage() {
             active: c.active,
             latitude: c.latitude,
             longitude: c.longitude,
+            veterinarians: c.veterinarians,
+            visitSplits: c.visitSplits,
             geocodeStatus: c.geocodeStatus,
             lastVisitedAt: c.lastVisitedAt?.toISOString() ?? null,
             nextVisitDate: nextByClinic.get(c.id) ?? null,

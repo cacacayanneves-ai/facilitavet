@@ -66,17 +66,20 @@ async function main() {
       destinationAddress: DEMO_OFFICE.address,
       destinationLatitude: DEMO_OFFICE.lat,
       destinationLongitude: DEMO_OFFICE.lng,
-      monthlyTarget: 100,
-      minVisitsPerDay: 4,
-      maxVisitsPerDay: 9,
+      // Meta em VISITAS (veterinarios), nao em clinicas: 160 visitas/mes e o
+      // exemplo real do produto — Cat 1 (80) + uma categoria alternada (80).
+      monthlyTarget: 160,
+      minVisitsPerDay: 6,
+      maxVisitsPerDay: 14,
       // As regras comerciais vao para o banco como JSON: o administrador pode
       // mudar frequencia, quantidades e o rodizio sem migracao nem deploy.
       categoryRules: {
         ...DEFAULT_CATEGORY_RULES,
         rules: {
+          // targetCount conta VISITAS (veterinarios), nao clinicas.
           CAT1: { frequency: 'monthly', targetCount: 80, enabled: true },
-          CAT2: { frequency: 'alternating', targetCount: 20, enabled: true },
-          CAT3: { frequency: 'alternating', targetCount: 20, enabled: true },
+          CAT2: { frequency: 'alternating', targetCount: 80, enabled: true },
+          CAT3: { frequency: 'alternating', targetCount: 80, enabled: true },
         },
       },
       scoreWeights: { ...DEFAULT_SCORE_WEIGHTS },
@@ -135,7 +138,11 @@ async function main() {
   // ---------------------------------------------------------------------
   const existingClinics = await prisma.clinic.count({ where: { organizationId: organization.id } });
   if (existingClinics === 0) {
-    const clinics = generateDemoClinics({ cat1: 80, cat2: 25, cat3: 25 });
+    // Pool maior que a meta com folga de proposito: nem toda clinica da
+    // carteira precisa ser visitada todo mes, so as que a categoria exige.
+    // Media de ~1,8 veterinario/clinica faz este pool suprir confortavelmente
+    // 80 visitas Cat1 + 80 da categoria alternada do mes.
+    const clinics = generateDemoClinics({ cat1: 80, cat2: 60, cat3: 60 });
     await prisma.clinic.createMany({
       data: clinics.map((c) => ({
         organizationId: organization.id,
@@ -149,6 +156,8 @@ async function main() {
         phone: c.phone,
         latitude: c.latitude,
         longitude: c.longitude,
+        veterinarians: c.veterinarians,
+        visitSplits: c.visitSplits,
         geocodeStatus: 'RESOLVED',
         geocodeLabel: `${c.address} — ${c.neighborhood}, ${c.city}/${c.state}`,
         geocodedAt: new Date(),

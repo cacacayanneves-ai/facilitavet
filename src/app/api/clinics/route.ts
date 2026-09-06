@@ -16,6 +16,10 @@ const createSchema = z.object({
   notes: z.string().max(2000).optional().nullable(),
   latitude: z.number().min(-90).max(90).optional().nullable(),
   longitude: z.number().min(-180).max(180).optional().nullable(),
+  /** Peso da visita: quantas visitas esta clinica contabiliza por passagem. */
+  veterinarians: z.number().int().min(1).max(100).optional(),
+  /** Em quantas partes a visita e dividida (1 = nao dividir). */
+  visitSplits: z.number().int().min(1).max(10).optional(),
   active: z.boolean().optional(),
   /** Tenta geocodificar quando nao vierem coordenadas. */
   geocode: z.boolean().optional(),
@@ -100,6 +104,8 @@ export async function POST(request: Request) {
         notes: input.notes ?? null,
         latitude,
         longitude,
+        veterinarians: input.veterinarians ?? 1,
+        visitSplits: input.visitSplits ?? 1,
         geocodeStatus,
         geocodeLabel,
         geocodedAt: latitude !== null ? new Date() : null,

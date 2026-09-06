@@ -19,12 +19,39 @@ export interface PlannerClinic extends LatLng {
   id: string;
   name: string;
   category: CategoryCode;
+  /**
+   * Numero de veterinarios da clinica — o PESO da parada.
+   *
+   * A meta do propagandista conta visitas por veterinario: uma parada numa
+   * clinica com 3 veterinarios vale 3 visitas. Isso torna o planejamento um
+   * problema de empacotamento com peso, nao de contagem de paradas.
+   */
+  veterinarians: number;
   neighborhood?: string | null;
   city?: string | null;
   /** Prioridade comercial (maior = mais importante). Seam para o CRM futuro. */
   priority?: number;
   /** Data da ultima visita — usada para desempate na selecao da carteira. */
   lastVisitedAt?: Date | null;
+
+  /**
+   * Em quantas partes a visita desta clinica deve ser dividida.
+   *
+   * Clinicas com muitos veterinarios podem ser atendidas em duas passagens
+   * separadas por pelo menos `PlannerPreferences.minDaysBetweenSplitVisits`
+   * dias, em vez de uma unica parada longa. 1 = nao dividir (padrao).
+   *
+   * So faz sentido no registro ORIGINAL da clinica (antes da expansao). Apos
+   * `expandSplitClinics`, cada parte resultante carrega `splitPart`/
+   * `splitTotal` e tem `visitSplits` implicitamente 1.
+   */
+  visitSplits?: number;
+  /** Preenchido apos a expansao: numero desta parte (1-based). */
+  splitPart?: number;
+  /** Preenchido apos a expansao: total de partes da clinica original. */
+  splitTotal?: number;
+  /** Preenchido apos a expansao: id da clinica original (igual para todas as partes). */
+  splitOf?: string;
 }
 
 export interface Anchor extends LatLng {
@@ -36,7 +63,10 @@ export type CategoryFrequency = 'monthly' | 'alternating' | 'manual';
 
 export interface CategoryRule {
   frequency: CategoryFrequency;
-  /** Quantas clinicas desta categoria entram no mes em que ela e exigida. */
+  /**
+   * Quantas VISITAS (veterinarios) desta categoria entram no mes em que ela e
+   * exigida — nao quantas clinicas. 80 visitas Cat 1 podem ser ~40 clinicas.
+   */
   targetCount: number;
   enabled: boolean;
 }
@@ -67,10 +97,18 @@ export interface ScoreWeights {
 }
 
 export interface PlannerPreferences {
+  /** Minimo e maximo de VISITAS (veterinarios) por dia. */
   minVisitsPerDay: number;
   maxVisitsPerDay: number;
   visitDurationMinutes: number;
+  /** Minutos extras por veterinario alem do primeiro. */
+  minutesPerExtraVeterinarian: number;
   bufferMinutes: number;
+  /**
+   * Intervalo minimo, em dias corridos, entre as partes da visita de uma
+   * mesma clinica dividida (ver `PlannerClinic.visitSplits`).
+   */
+  minDaysBetweenSplitVisits: number;
   workStartTime: string; // "08:00"
   workEndTime: string; // "18:00"
   lunchStart?: string | null;
@@ -137,6 +175,12 @@ export interface PlannedStop {
   clinicId: string;
   clinicName: string;
   category: CategoryCode;
+  /** Visitas contabilizadas nesta parada. */
+  veterinarians: number;
+  /** Parte da visita (1-based) quando a clinica e dividida; 1 caso contrario. */
+  part: number;
+  /** Total de partes da visita desta clinica no mes. */
+  totalParts: number;
   neighborhood?: string | null;
   lat: number;
   lng: number;
@@ -171,6 +215,10 @@ export interface PlannedRoute {
   destinationLabel: string | null;
   destination: LatLng | null;
   stops: PlannedStop[];
+  /** Visitas (veterinarios) do dia. */
+  totalVisits: number;
+  /** Paradas (clinicas) do dia. */
+  totalStops: number;
   totalDistanceMeters: number;
   totalDurationSeconds: number;
   score: number;
@@ -187,14 +235,25 @@ export interface PlannerWarning {
     | 'TARGET_BELOW_REQUIRED'
     | 'CAPACITY_TIGHT'
     | 'MATRIX_FALLBACK'
-    | 'DAY_OVERFLOW';
+    | 'DAY_OVERFLOW'
+    | 'CLINIC_EXCEEDS_DAY'
+    | 'DAY_EXCEEDS_WORKDAY'
+    | 'SPLIT_SEPARATION_UNMET';
   message: string;
   details?: Record<string, unknown>;
 }
 
 export interface FeasibilityReport {
   feasible: boolean;
+  /** Visitas (veterinarios) exigidas no mes. */
   requiredVisits: number;
+  /** Paradas (clinicas) correspondentes. */
+  requiredStops: number;
+  /**
+   * Clinicas cujo numero de veterinarios sozinho ja estoura o limite diario.
+   * Uma clinica e atomica: nao da para dividir seus veterinarios entre dias.
+   */
+  oversizedClinics: Array<{ id: string; name: string; veterinarians: number }>;
   availableDays: number;
   capacity: number;
   minimumCapacity: number;
@@ -209,11 +268,18 @@ export interface PlannerStatistics {
   executionId: string;
   durationMs: number;
   strategy: string;
+  /** Visitas (veterinarios) selecionadas. */
   selectedVisits: number;
+  /** Paradas (clinicas) selecionadas. */
+  selectedStops: number;
   requiredCategories: CategoryCode[];
+  /** Visitas por categoria. */
   perCategory: Record<CategoryCode, number>;
+  /** Clinicas por categoria. */
+  perCategoryStops: Record<CategoryCode, number>;
   plannedDays: number;
   averageVisitsPerDay: number;
+  averageStopsPerDay: number;
   totalDistanceMeters: number;
   totalDurationSeconds: number;
   averageScore: number;

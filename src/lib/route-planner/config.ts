@@ -18,11 +18,12 @@ export const DEFAULT_SCORE_WEIGHTS: ScoreWeights = {
   detour: 1.4,
   /** quilometro de raio medio do agrupamento do dia */
   concentration: 2.0,
-  /** desvio da meta diaria de visitas */
+  /** desvio da meta diaria de visitas (veterinarios) */
   balance: 3.0,
 };
 
 export const DEFAULT_CATEGORY_RULES: CategoryRuleSet = {
+  // targetCount conta VISITAS (veterinarios), nao clinicas.
   rules: {
     CAT1: { frequency: 'monthly', targetCount: 80, enabled: true },
     CAT2: { frequency: 'alternating', targetCount: 80, enabled: true },
@@ -35,10 +36,13 @@ export const DEFAULT_CATEGORY_RULES: CategoryRuleSet = {
 };
 
 export const DEFAULT_PREFERENCES: PlannerPreferences = {
-  minVisitsPerDay: 4,
-  maxVisitsPerDay: 9,
+  // Em VISITAS (veterinarios) por dia.
+  minVisitsPerDay: 6,
+  maxVisitsPerDay: 14,
   visitDurationMinutes: 30,
+  minutesPerExtraVeterinarian: 10,
   bufferMinutes: 5,
+  minDaysBetweenSplitVisits: 7,
   workStartTime: '08:00',
   workEndTime: '18:00',
   lunchStart: '12:00',
@@ -77,4 +81,5 @@ export const OPTIMIZATION_LIMITS = {
   kmeansMaxIterations: 60,
   kmeansRestarts: 8,
   balancedAssignmentMaxIterations: 25,
+  capacityRepairPasses: 200,
 };

@@ -45,13 +45,27 @@ describe('distribuicao da meta pelos dias', () => {
 
 describe('viabilidade', () => {
   it('aprova 100 visitas em 17 dias com maximo de 9/dia', () => {
-    const report = evaluateFeasibility(100, 17, 4, 9);
+    const report = evaluateFeasibility({
+      requiredVisits: 100,
+      requiredStops: 100,
+      availableDays: 17,
+      minPerDay: 4,
+      maxPerDay: 9,
+      clinics: [],
+    });
     expect(report.feasible).toBe(true);
     expect(report.capacity).toBe(153);
   });
 
   it('recusa 80 visitas em 17 dias com maximo de 4/dia e explica a alternativa', () => {
-    const report = evaluateFeasibility(80, 17, 2, 4);
+    const report = evaluateFeasibility({
+      requiredVisits: 80,
+      requiredStops: 80,
+      availableDays: 17,
+      minPerDay: 2,
+      maxPerDay: 4,
+      clinics: [],
+    });
     expect(report.feasible).toBe(false);
     expect(report.capacity).toBe(68);
     expect(report.deficit).toBe(12);
@@ -60,8 +74,49 @@ describe('viabilidade', () => {
   });
 
   it('trata mes sem nenhum dia disponivel', () => {
-    const report = evaluateFeasibility(100, 0, 4, 9);
+    const report = evaluateFeasibility({
+      requiredVisits: 100,
+      requiredStops: 100,
+      availableDays: 0,
+      minPerDay: 4,
+      maxPerDay: 9,
+      clinics: [],
+    });
     expect(report.feasible).toBe(false);
-    expect(report.message).toContain('Nenhum dia disponivel');
+    expect(report.message).toContain('Nenhum dia disponível');
+  });
+
+  it('recusa quando uma clinica sozinha tem mais veterinarios que o limite diario', () => {
+    // Uma clinica e atomica: nao da para atender 6 dos 9 veterinarios hoje e
+    // 3 amanha. Se o limite diario e 8 e uma clinica tem 9 veterinarios,
+    // nenhum dia do mes consegue recebe-la — mais dias nao resolve isso.
+    const report = evaluateFeasibility({
+      requiredVisits: 50,
+      requiredStops: 10,
+      availableDays: 20,
+      minPerDay: 4,
+      maxPerDay: 8,
+      clinics: [
+        { id: '1', name: 'Clínica Alfa', category: 'CAT1', veterinarians: 9, lat: 0, lng: 0 },
+        { id: '2', name: 'Clínica Beta', category: 'CAT1', veterinarians: 3, lat: 0, lng: 0 },
+      ],
+    });
+    expect(report.feasible).toBe(false);
+    expect(report.oversizedClinics).toHaveLength(1);
+    expect(report.oversizedClinics[0].name).toBe('Clínica Alfa');
+    expect(report.message).toContain('Clínica Alfa');
+    expect(report.message).toContain('9');
+  });
+
+  it('nao acusa clinica sobredimensionada quando ela cabe no limite', () => {
+    const report = evaluateFeasibility({
+      requiredVisits: 20,
+      requiredStops: 5,
+      availableDays: 10,
+      minPerDay: 4,
+      maxPerDay: 14,
+      clinics: [{ id: '1', name: 'Clínica Alfa', category: 'CAT1', veterinarians: 8, lat: 0, lng: 0 }],
+    });
+    expect(report.oversizedClinics).toHaveLength(0);
   });
 });

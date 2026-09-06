@@ -73,6 +73,29 @@ export interface DemoClinicSeed {
   phone: string;
   latitude: number;
   longitude: number;
+  /** Numero de veterinarios da clinica — o peso da visita. */
+  veterinarians: number;
+  /** Em quantas partes a visita e dividida (1 = nao dividida). */
+  visitSplits: number;
+}
+
+/**
+ * Sorteia o numero de veterinarios de uma clinica.
+ *
+ * Distribuicao inspirada na realidade do setor: a maioria das clinicas tem 1
+ * ou 2 veterinarios, uma minoria tem equipes maiores. Clinicas com muitos
+ * veterinarios (>= 5) sao as candidatas naturais a visita dividida em duas
+ * partes — mas a divisao em si continua sendo uma configuracao explicita
+ * (`visitSplits`), nunca automatica.
+ */
+function rollVeterinarianCount(rng: () => number): number {
+  const roll = rng();
+  if (roll < 0.5) return 1;
+  if (roll < 0.8) return 2;
+  if (roll < 0.93) return 3;
+  if (roll < 0.98) return 4;
+  if (roll < 0.995) return 5 + Math.floor(rng() * 2); // 5-6
+  return 7 + Math.floor(rng() * 3); // 7-9, clinicas excepcionalmente grandes
 }
 
 /** PRNG deterministico para que a demo seja sempre a mesma. */
@@ -128,6 +151,11 @@ export function generateDemoClinics(
     const latitude = Number((hood.lat + gy * hood.spread).toFixed(6));
     const longitude = Number((hood.lng + gx * hood.spread).toFixed(6));
 
+    const veterinarians = rollVeterinarianCount(rng);
+    // So clinicas grandes (>=5 veterinarios) sao candidatas a divisao, e ainda
+    // assim so metade delas — a decisao e comercial, nao automatica.
+    const visitSplits = veterinarians >= 5 && rng() < 0.5 ? 2 : 1;
+
     clinics.push({
       name,
       category: categories[i],
@@ -140,6 +168,8 @@ export function generateDemoClinics(
       phone: `(11) 9${String(Math.floor(rng() * 10000)).padStart(4, '0')}-${String(Math.floor(rng() * 10000)).padStart(4, '0')}`,
       latitude,
       longitude,
+      veterinarians,
+      visitSplits,
     });
   }
 

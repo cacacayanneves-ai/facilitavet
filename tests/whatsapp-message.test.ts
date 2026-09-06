@@ -11,9 +11,9 @@ import { normalizePhone } from '@/lib/providers/whatsapp/types';
 const baseInput = {
   date: new Date('2026-09-14T00:00:00.000Z'),
   stops: [
-    { sequence: 1, time: '08:00', clinicName: 'Clínica Veterinária Alfa', neighborhood: 'Vila Mariana' },
-    { sequence: 2, time: '09:10', clinicName: 'Hospital Veterinário Beta', neighborhood: 'Vila Mariana' },
-    { sequence: 3, time: '10:15', clinicName: 'Clínica Gama', neighborhood: 'Saúde' },
+    { sequence: 1, time: '08:00', clinicName: 'Clínica Veterinária Alfa', neighborhood: 'Vila Mariana', veterinarians: 1 },
+    { sequence: 2, time: '09:10', clinicName: 'Hospital Veterinário Beta', neighborhood: 'Vila Mariana', veterinarians: 1 },
+    { sequence: 3, time: '10:15', clinicName: 'Clínica Gama', neighborhood: 'Saúde', veterinarians: 1 },
   ],
   totalDistanceMeters: 42_000,
   totalDurationSeconds: 11_400,
@@ -62,6 +62,26 @@ describe('mensagem do WhatsApp', () => {
     expect(formatDuration(11_400)).toBe('3h10');
     expect(formatDuration(2_700)).toBe('45min');
     expect(formatDuration(7_200)).toBe('2h00');
+  });
+
+  it('distingue clinicas de visitas quando alguma clinica tem mais de um veterinario', () => {
+    const message = buildRouteMessage({
+      ...baseInput,
+      stops: [
+        { sequence: 1, time: '08:00', clinicName: 'Hospital Central', neighborhood: 'Vila Mariana', veterinarians: 4 },
+        { sequence: 2, time: '09:10', clinicName: 'Clínica Gama', neighborhood: 'Saúde', veterinarians: 1 },
+      ],
+    });
+    // 2 clinicas, mas 5 visitas (veterinarios) — a mensagem nao pode dizer "2 visitas".
+    expect(message).toContain('2 clínicas · 5 visitas programadas');
+    expect(message).toContain('Hospital Central (4 vets)');
+    expect(message).not.toContain('Clínica Gama (1 vets)');
+  });
+
+  it('usa a contagem simples quando nenhuma clinica tem mais de um veterinario', () => {
+    const message = buildRouteMessage(baseInput);
+    expect(message).toContain('3 visitas programadas');
+    expect(message).not.toContain('clínicas ·');
   });
 });
 

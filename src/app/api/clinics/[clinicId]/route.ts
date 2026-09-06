@@ -16,6 +16,8 @@ const updateSchema = z.object({
   notes: z.string().max(2000).nullable().optional(),
   latitude: z.number().min(-90).max(90).nullable().optional(),
   longitude: z.number().min(-180).max(180).nullable().optional(),
+  veterinarians: z.number().int().min(1).max(100).optional(),
+  visitSplits: z.number().int().min(1).max(10).optional(),
   active: z.boolean().optional(),
 });
 

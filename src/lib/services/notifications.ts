@@ -112,6 +112,7 @@ export async function prepareDailyMessages(options: { date?: string } = {}): Pro
         time: stop.estimatedArrival ? formatTime(stop.estimatedArrival) : '--:--',
         clinicName: stop.clinic.name,
         neighborhood: stop.clinic.neighborhood,
+        veterinarians: stop.veterinarians,
       })),
       totalDistanceMeters: route.totalDistanceMeters,
       totalDurationSeconds: route.totalDurationSeconds,

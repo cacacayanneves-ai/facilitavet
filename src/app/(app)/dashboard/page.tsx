@@ -308,6 +308,9 @@ function serializeRoute(route: RouteWithStops | null) {
       durationFromPreviousSeconds: stop.durationFromPreviousSeconds,
       visitId: stop.visit?.id ?? null,
       status: stop.visit?.status ?? 'PLANNED',
+      veterinarians: stop.veterinarians,
+      part: stop.part,
+      totalParts: stop.totalParts,
     })),
   };
 }

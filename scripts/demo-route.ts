@@ -23,7 +23,7 @@ function arg(name: string, fallback: number): number {
 
 const month = arg('month', 9);
 const year = arg('year', 2026);
-const target = arg('target', 100);
+const target = arg('target', 160);
 const maxDays = arg('days', 0);
 
 function workingDays(y: number, m: number, limit: number): AvailableDay[] {
@@ -39,7 +39,7 @@ function workingDays(y: number, m: number, limit: number): AvailableDay[] {
   return limit > 0 ? days.slice(0, limit) : days;
 }
 
-const clinics: PlannerClinic[] = generateDemoClinics({ cat1: 80, cat2: 25, cat3: 25 }).map((c, i) => ({
+const clinics: PlannerClinic[] = generateDemoClinics({ cat1: 80, cat2: 60, cat3: 60 }).map((c, i) => ({
   id: `demo-${i}`,
   name: c.name,
   category: c.category,
@@ -47,6 +47,8 @@ const clinics: PlannerClinic[] = generateDemoClinics({ cat1: 80, cat2: 25, cat3:
   city: c.city,
   lat: c.latitude,
   lng: c.longitude,
+  veterinarians: c.veterinarians,
+  visitSplits: c.visitSplits,
 }));
 
 const km = (m: number) => `${(m / 1000).toFixed(1)} km`;
@@ -69,8 +71,8 @@ async function main() {
         ...DEFAULT_CATEGORY_RULES,
         rules: {
           CAT1: { frequency: 'monthly', targetCount: 80, enabled: true },
-          CAT2: { frequency: 'alternating', targetCount: 20, enabled: true },
-          CAT3: { frequency: 'alternating', targetCount: 20, enabled: true },
+          CAT2: { frequency: 'alternating', targetCount: 80, enabled: true },
+          CAT3: { frequency: 'alternating', targetCount: 80, enabled: true },
         },
       },
       preferences: DEFAULT_PREFERENCES,
@@ -84,8 +86,9 @@ async function main() {
   console.log('============================================================');
   console.log(`  Categorias do mes .... ${s.requiredCategories.join(' + ')}`);
   console.log(`  Visitas .............. ${s.selectedVisits} (Cat1 ${s.perCategory.CAT1} / Cat2 ${s.perCategory.CAT2} / Cat3 ${s.perCategory.CAT3})`);
+  console.log(`  Clinicas (paradas) ... ${s.selectedStops} (Cat1 ${s.perCategoryStops.CAT1} / Cat2 ${s.perCategoryStops.CAT2} / Cat3 ${s.perCategoryStops.CAT3})`);
   console.log(`  Dias planejados ...... ${s.plannedDays} de ${days.length}`);
-  console.log(`  Media diaria ......... ${s.averageVisitsPerDay}`);
+  console.log(`  Media diaria ......... ${s.averageVisitsPerDay} visitas / ${s.averageStopsPerDay} clinicas`);
   console.log(`  Distancia estimada ... ${km(s.totalDistanceMeters)}`);
   console.log(`  Deslocamento ......... ${hm(s.totalDurationSeconds)}`);
   console.log(`  Score medio .......... ${s.averageScore}/100`);
@@ -105,7 +108,7 @@ async function main() {
   console.log('\n  Agenda:');
   for (const route of result.routes) {
     console.log(
-      `    ${route.date}  ${String(route.stops.length).padStart(2)} visitas  ${km(route.totalDistanceMeters).padStart(9)}  ${hm(route.totalDurationSeconds)}  score ${String(route.score).padStart(5)}  ${route.regionLabel}`,
+      `    ${route.date}  ${String(route.totalVisits).padStart(2)} visitas em ${String(route.totalStops).padStart(2)} clínicas  ${km(route.totalDistanceMeters).padStart(9)}  ${hm(route.totalDurationSeconds)}  score ${String(route.score).padStart(5)}  ${route.regionLabel}`,
     );
   }
 
@@ -113,7 +116,7 @@ async function main() {
   console.log(`\n  Detalhe de ${sample.date} (${sample.regionLabel}):`);
   for (const stop of sample.stops) {
     console.log(
-      `    ${stop.sequence}. ${stop.estimatedArrival}  ${stop.clinicName.padEnd(34)} ${String(stop.neighborhood).padEnd(16)} +${km(stop.distanceFromPreviousMeters)}`,
+      `    ${stop.sequence}. ${stop.estimatedArrival}  ${stop.clinicName.padEnd(34)} ${String(stop.neighborhood).padEnd(16)} ${stop.veterinarians} vet(s)  +${km(stop.distanceFromPreviousMeters)}`,
     );
   }
 

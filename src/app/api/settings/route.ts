@@ -23,7 +23,9 @@ const schema = z.object({
       lunchStart: timeSchema.nullable().optional(),
       lunchEnd: timeSchema.nullable().optional(),
       visitDurationMinutes: z.number().int().min(5).max(240),
+      minutesPerExtraVeterinarian: z.number().int().min(0).max(120),
       bufferMinutes: z.number().int().min(0).max(120),
+      minDaysBetweenSplitVisits: z.number().int().min(1).max(60),
     })
     .optional(),
   anchors: z

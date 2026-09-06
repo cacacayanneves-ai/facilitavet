@@ -24,10 +24,34 @@ O Facilita Vet resolve isso pensando em **conjuntos de visitas**, não em
 antes de decidir a ordem — e é essa decisão que separa uma agenda que atravessa
 a cidade cinco vezes de uma que passa o dia inteiro numa região.
 
-Na carteira de demonstração (130 clínicas em bairros reais de São Paulo, 100
-visitas em 21 dias úteis), o planejamento gerado percorre **~350 km** contra
-**~1.330 km** de percorrer a mesma carteira na ordem da planilha — **73% menos
+Na carteira de demonstração (200 clínicas em bairros reais de São Paulo, 160
+visitas em 21 dias úteis), o planejamento gerado percorre **~300 km** contra
+**~1.000 km** de percorrer a mesma carteira na ordem da planilha — **~70% menos
 deslocamento**, com dias concentrados em uma ou duas regiões cada.
+
+### A unidade de trabalho é a VISITA, não a clínica
+
+Uma clínica pode ter mais de um veterinário, e a meta do propagandista conta
+**visitas por veterinário** — uma parada numa clínica com 3 veterinários vale 3
+visitas numa única passagem. Isso muda a natureza do problema: 160 visitas no
+mês não significam 160 paradas na agenda, e sim algo como ~90 clínicas,
+dependendo do tamanho de cada uma.
+
+Isso atravessa o motor inteiro:
+
+- **Seleção**: a cota de cada categoria é preenchida por peso (visitas), não por
+  contagem de clínicas — um *bin packing* guloso escolhe clínicas até fechar a
+  meta, não as primeiras N da lista.
+- **Clustering**: a capacidade diária de cada dia é medida em visitas. Uma
+  clínica de 6 veterinários ocupa 6 unidades da cota do dia, e o algoritmo lida
+  com isso como um problema de empacotamento capacitado com peso — não uma
+  simples divisão em partes iguais.
+- **Duração da parada**: escala com o número de veterinários (`duração base +
+  minutos por veterinário adicional`), então os horários de chegada refletem o
+  tempo real de atendimento.
+- **Visita dividida**: uma clínica grande pode ter a visita marcada para
+  acontecer em duas (ou mais) passagens separadas por um intervalo mínimo
+  configurável (padrão 7 dias — nunca na mesma semana). Ver `split-visits.ts`.
 
 ---
 
@@ -66,14 +90,15 @@ sequência. Não há chamada de IA no caminho crítico do planejamento.
 
 ### 1. Seleção — quem entra no mês
 
-O ciclo comercial é **configuração ancorada**, nunca `if (mes === 1)`:
+O ciclo comercial é **configuração ancorada**, nunca `if (mes === 1)`. `targetCount`
+conta **visitas** (veterinários), não clínicas:
 
 ```ts
 {
   rules: {
     CAT1: { frequency: 'monthly',     targetCount: 80 },
-    CAT2: { frequency: 'alternating', targetCount: 20 },
-    CAT3: { frequency: 'alternating', targetCount: 20 },
+    CAT2: { frequency: 'alternating', targetCount: 80 },
+    CAT3: { frequency: 'alternating', targetCount: 80 },
   },
   alternatingOrder: ['CAT2', 'CAT3'],
   anchorMonth: 1, anchorYear: 2026,
@@ -84,6 +109,12 @@ A categoria alternada do mês vem de aritmética de meses absolutos a partir da
 âncora. Funciona começando em qualquer mês, atravessa a virada de ano e lida com
 meses anteriores à âncora. O administrador muda tudo isso pela tela de
 Configurações — sem migração e sem deploy.
+
+A seleção preenche cada cota por **peso**: escolhe clínicas por prioridade
+comercial até a soma de veterinários fechar a meta da categoria, com um ajuste
+fino de "melhor encaixe" para a clínica que sobra na fila (`fillToVisitQuota`
+em `selection.ts`) — porque clínicas são atômicas, raramente a soma fecha
+exata na primeira tentativa gulosa.
 
 ### 2. Distribuição pelos dias
 
@@ -99,13 +130,21 @@ que a região densa receba uma a mais e a esparsa uma a menos. Sem esse limite o
 algoritmo degenera em "um dia com 9 e vários com 4" — que fecha a conta mas
 quebra a regra de agenda equilibrada.
 
-### 3. Clustering capacitado — o diferencial
+### 3. Clustering capacitado com peso — o diferencial
 
-O passo que decide **quais clínicas pertencem ao mesmo dia**.
+O passo que decide **quais clínicas pertencem ao mesmo dia**. Como a cota diária
+é medida em visitas mas a unidade que se move é a clínica (atômica), isso é um
+problema de *empacotamento capacitado com peso*, não uma partição de tamanho
+fixo: um dia com teto de 14 visitas pode receber 14 clínicas de 1 veterinário
+ou 5 de 3 — nunca "meia clínica".
 
 - **k-means++** para inicializar centroides bem espalhados;
-- **atribuição por arrependimento** (*regret*): quem mais perde se não ficar no
-  seu melhor cluster escolhe primeiro, respeitando a capacidade do dia;
+- **atribuição por arrependimento** (*regret*), ponderada pelo peso: quem mais
+  perde se não ficar no seu melhor cluster decide primeiro, e em empate a
+  clínica **mais pesada** decide primeiro — são as mais difíceis de encaixar,
+  e deixá-las para o fim é o caminho garantido para o estouro;
+- **reparo de capacidade**: move clínicas do dia mais sobrecarregado para o
+  dia com folga mais barato geograficamente, até respeitar os limites;
 - iteração até estabilizar, com múltiplos *restarts*.
 
 O passo do arrependimento é o que impede o resultado degenerado. Sem ele, o
@@ -114,6 +153,16 @@ lugar — produzindo um dia ótimo e vários péssimos.
 
 As coordenadas são projetadas para um plano métrico local antes do clustering:
 agrupar em graus de lat/lng "estica" os grupos no eixo leste-oeste.
+
+**Visitas divididas.** Clínicas com a visita marcada para dividir entram no
+clustering geográfico só com a primeira parte — ela escolhe o melhor dia pela
+demanda geográfica de sempre. As demais partes são inseridas *depois*, dia por
+dia, escolhendo entre os dias do mês aquele que respeita o intervalo mínimo em
+relação a todas as partes já posicionadas da mesma clínica, tem espaço no teto
+diário, e fica geograficamente mais barato. Isso evita desfazer uma boa decisão
+geográfica já tomada — só preenche o que falta. Quando o mês não tem dias
+suficientes para a separação ideal, a visita **nunca é descartada**: o sistema
+agenda com a melhor separação possível e avisa (`SPLIT_SEPARATION_UNMET`).
 
 ### 4. Sequenciamento
 
@@ -131,10 +180,13 @@ custo = minutos·w.duration + km·w.distance + inversões·w.backtracking
       + kmDesvio·w.detour + kmRaio·w.concentration + |Δmeta|·w.balance
 ```
 
-O score exibido (0–100) normaliza o custo **por parada** — sem isso, um dia com
-8 visitas sempre "pontuaria pior" que um com 4, o que não diz nada sobre
-qualidade. *Backtracking* é medido por inversões de azimute acima de 110°:
-exatamente o que o profissional sente como "voltei por onde vim".
+O termo de equilíbrio (`balance`) compara **visitas** contra a meta diária, não
+paradas — senão uma clínica concentrada de 6 veterinários "pontuaria pior" só
+por acumular mais minutos de atendimento. Já a normalização final do score é
+**por parada**: distância, tempo e inversões de sentido escalam com
+deslocamentos entre clínicas, não com quantos veterinários cada uma tem.
+*Backtracking* é medido por inversões de azimute acima de 110°: exatamente o
+que o profissional sente como "voltei por onde vim".
 
 ### 6. Comparação e honestidade estatística
 
@@ -185,7 +237,7 @@ Abra <http://localhost:3000> e entre com:
 demo@facilitavet.app / facilitavet
 ```
 
-O sistema abre **com conteúdo**: 130 clínicas, dois meses planejados, calendário
+O sistema abre **com conteúdo**: 200 clínicas (com veterinários e algumas visitas divididas), dois meses planejados, calendário
 preenchido, mapa com rotas, histórico com visitas realizadas e indicadores reais.
 
 ### Comandos
@@ -362,17 +414,19 @@ teste de integração contra o banco.
 npm test
 ```
 
-78 testes. Os que cobrem regras de produto:
+89 testes. Os que cobrem regras de produto:
 
 | Área | O que trava |
 |---|---|
 | Ciclo de categorias | Cat 1 mensal; Cat 2/Cat 3 alternadas; nunca as duas no mesmo mês; virada de ano; meses anteriores à âncora; âncora configurável |
 | Exclusividade | Detecta a mesma clínica cadastrada em duas categorias |
 | Distribuição | 100/17 usa só 5 e 6, soma exata 100; espalhada pelo mês |
-| Viabilidade | 80 visitas em 17 dias com máx. 4/dia é recusado **com a alternativa calculada** |
+| Viabilidade | 80 visitas em 17 dias com máx. 4/dia é recusado **com a alternativa calculada**; clínica cujo nº de veterinários sozinho estoura o limite diário é detectada |
+| Peso por veterinário | Uma clínica com N veterinários conta N visitas numa única parada; duração da parada escala com o nº de veterinários; seleção fecha a meta por peso, não por contagem de clínicas |
+| Visita dividida | As duas partes caem em dias separados por ≥ intervalo mínimo configurado; soma dos veterinários das partes recompõe o total original; nunca perde a segunda parte mesmo sem dias suficientes para a separação ideal |
 | Rota | Todas as obrigatórias aparecem; nenhuma duas vezes; dias concentrados (raio < 6 km); horários crescentes; almoço respeitado |
 | Determinismo | Mesma entrada + mesma semente = mesmo plano |
-| Linha de base | O plano bate a ordem da planilha com folga (> 50%) |
+| Linha de base | O plano bate a ordem da planilha com folga (> 30%) |
 | Edição manual | Reordenar recalcula distância, tempo e score de verdade |
 | Adequação | Alternativas de troca respeitam as categorias do mês |
 | Geocoding | Falha é tratada e visível, nunca silenciosa |

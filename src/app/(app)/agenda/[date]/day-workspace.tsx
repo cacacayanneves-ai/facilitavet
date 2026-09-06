@@ -172,7 +172,11 @@ export function DayWorkspace({
     <div className="space-y-5">
       {/* Metricas do dia */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Stat label="Visitas" value={String(route.stops.length)} hint={`${completed} concluídas`} />
+        <Stat
+          label="Visitas"
+          value={String(route.totalVisits ?? route.stops.length)}
+          hint={`${route.stops.length} clínica${route.stops.length === 1 ? '' : 's'} · ${completed} concluída${completed === 1 ? '' : 's'}`}
+        />
         <Stat
           label={route.estimated ? 'Distância estimada' : 'Distância'}
           value={formatKm(route.totalDistanceMeters)}
@@ -280,10 +284,16 @@ export function DayWorkspace({
                   <div className="min-w-0 flex-1">
                     <p className={cn('truncate text-sm font-medium text-ink-900', (completedStop || cancelled) && 'line-through decoration-ink-300')}>
                       {stop.clinicName}
+                      {stop.totalParts > 1 && (
+                        <span className="ml-1.5 text-[10px] font-normal text-ink-400">
+                          parte {stop.part}/{stop.totalParts}
+                        </span>
+                      )}
                     </p>
                     <p className="truncate text-[11px] text-ink-400">
                       {stop.neighborhood}
                       {stop.address && <> · {stop.address}</>}
+                      {stop.veterinarians > 1 && <> · {stop.veterinarians} vets</>}
                     </p>
                   </div>
 

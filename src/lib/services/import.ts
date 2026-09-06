@@ -30,6 +30,8 @@ export type CanonicalField =
   | 'phone'
   | 'latitude'
   | 'longitude'
+  | 'veterinarians'
+  | 'visitSplits'
   | 'notes'
   | 'active';
 
@@ -44,6 +46,10 @@ export const CANONICAL_FIELDS: Array<{ field: CanonicalField; label: string; req
   { field: 'phone', label: 'Telefone', required: false },
   { field: 'latitude', label: 'Latitude', required: false },
   { field: 'longitude', label: 'Longitude', required: false },
+  // A meta do propagandista conta visitas por veterinario — este numero
+  // participa diretamente da matematica do planejamento, nao e so exibicao.
+  { field: 'veterinarians', label: 'Quantidade de veterinarios', required: false },
+  { field: 'visitSplits', label: 'Dividir visita em quantas partes', required: false },
   { field: 'notes', label: 'Observacoes', required: false },
   { field: 'active', label: 'Ativo', required: false },
 ];
@@ -60,6 +66,13 @@ const FIELD_SYNONYMS: Record<CanonicalField, string[]> = {
   phone: ['telefone', 'fone', 'celular', 'contato', 'whatsapp', 'tel'],
   latitude: ['latitude', 'lat'],
   longitude: ['longitude', 'lng', 'lon', 'long'],
+  veterinarians: [
+    'veterinarios', 'qtd veterinarios', 'quantidade de veterinarios', 'numero de veterinarios',
+    'nº veterinarios', 'n veterinarios', 'vets', 'qtd vets', 'medicos veterinarios', 'nº vets',
+  ],
+  visitSplits: [
+    'partes', 'dividir visita', 'divisao', 'qtd partes', 'numero de partes', 'visitas divididas', 'split',
+  ],
   notes: ['observacoes', 'observacao', 'obs', 'notas', 'comentarios'],
   active: ['ativo', 'ativa', 'status', 'situacao'],
 };
@@ -173,7 +186,11 @@ export function suggestColumnMapping(columns: string[]): Partial<Record<Canonica
 
 export type RowIssue =
   | { level: 'error'; code: 'MISSING_NAME' | 'INVALID_CATEGORY' | 'INVALID_COORDINATES'; message: string }
-  | { level: 'warning'; code: 'DUPLICATE_IN_FILE' | 'DUPLICATE_IN_DATABASE' | 'NO_LOCATION_DATA'; message: string };
+  | {
+      level: 'warning';
+      code: 'DUPLICATE_IN_FILE' | 'DUPLICATE_IN_DATABASE' | 'NO_LOCATION_DATA' | 'INVALID_VETERINARIAN_COUNT';
+      message: string;
+    };
 
 export interface NormalizedRow {
   index: number;
@@ -187,6 +204,10 @@ export interface NormalizedRow {
   phone: string | null;
   latitude: number | null;
   longitude: number | null;
+  /** Numero de veterinarios da clinica — peso da visita no planejamento. */
+  veterinarians: number;
+  /** Em quantas partes a visita deve ser dividida (1 = nao dividir). */
+  visitSplits: number;
   notes: string | null;
   active: boolean;
   issues: RowIssue[];
@@ -280,6 +301,35 @@ export async function validateRows(args: {
       });
     }
 
+    // A meta do propagandista conta VISITAS POR VETERINARIO — sem esta
+    // coluna, cada clinica vale 1 visita (comportamento anterior, ainda
+    // valido para quem nao tem essa informacao na planilha).
+    const veterinariansRaw = get('veterinarians');
+    let veterinarians = 1;
+    if (veterinariansRaw) {
+      const parsed = Number.parseInt(veterinariansRaw.replace(/\D/g, ''), 10);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        veterinarians = parsed;
+      } else {
+        issues.push({
+          level: 'warning',
+          code: 'INVALID_VETERINARIAN_COUNT',
+          message: `Não foi possível interpretar "${veterinariansRaw}" como número de veterinários. Usando 1.`,
+        });
+      }
+    }
+
+    const visitSplitsRaw = get('visitSplits');
+    let visitSplits = 1;
+    if (visitSplitsRaw) {
+      const parsed = Number.parseInt(visitSplitsRaw.replace(/\D/g, ''), 10);
+      if (Number.isFinite(parsed) && parsed > 1) visitSplits = parsed;
+    }
+    if (visitSplits > veterinarians) {
+      // Nao da para dividir a visita em mais partes do que ha veterinarios.
+      visitSplits = 1;
+    }
+
     const key = `${normalizeKey(name)}|${normalizeKey(neighborhood ?? '')}`;
     if (name) {
       if (seenInFile.has(key)) {
@@ -312,6 +362,8 @@ export async function validateRows(args: {
       phone: get('phone') || null,
       latitude,
       longitude,
+      veterinarians,
+      visitSplits,
       notes: get('notes') || null,
       active: parseActive(get('active')),
       issues,
@@ -427,6 +479,8 @@ export async function commitRows(args: {
       notes: row.notes,
       latitude: row.latitude,
       longitude: row.longitude,
+      veterinarians: row.veterinarians,
+      visitSplits: row.visitSplits,
       geocodeStatus,
       geocodeLabel: row.geocodeLabel,
       geocodedAt: hasCoordinates ? new Date() : null,

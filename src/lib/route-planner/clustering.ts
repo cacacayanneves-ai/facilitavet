@@ -5,6 +5,8 @@ import type { LatLng } from './types';
 
 export interface ClusterPoint extends LatLng {
   id: string;
+  /** Peso da parada: quantas visitas (veterinarios) ela contabiliza. */
+  weight: number;
 }
 
 export interface ClusterResult {
@@ -13,40 +15,71 @@ export interface ClusterResult {
   centroids: Array<[number, number]>;
   /** Soma das distancias ao quadrado ao centroide (inercia). */
   inertia: number;
+  /** Carga (soma de pesos) de cada cluster. */
+  loads: number[];
+  /** Quanto a solucao viola os limites min/max de cada dia. */
+  capacityViolation: number;
+}
+
+export interface CapacityBounds {
+  /** Alvo de visitas por dia (soft). */
+  targets: number[];
+  /** Limites duros de visitas por dia. */
+  min: number;
+  max: number;
 }
 
 /**
- * CLUSTERIZACAO CAPACITADA — o coracao do diferencial do produto.
+ * CLUSTERIZACAO CAPACITADA COM PESO — o coracao do diferencial do produto.
  *
- * Por que nao k-means puro: k-means livre produz clusters de tamanhos
- * arbitrarios (um dia com 14 visitas, outro com 2). Por que nao "as N mais
- * proximas": isso produz um dia otimo e varios dias pessimos, porque o
- * algoritmo consome as regioes densas primeiro e sobra uma carteira esparsa.
+ * Por que nao k-means puro: k-means livre produz grupos de tamanhos
+ * arbitrarios (um dia com 20 visitas, outro com 2). Por que nao "as N mais
+ * proximas": isso produz um dia otimo e varios pessimos, porque o algoritmo
+ * consome as regioes densas primeiro e sobra uma carteira esparsa.
  *
- * A solucao e um k-means BALANCEADO com capacidades:
+ * A dificuldade extra deste dominio: a cota diaria conta VETERINARIOS, mas a
+ * unidade que se move e a CLINICA, que e atomica. Um dia com teto de 14
+ * visitas pode receber 14 clinicas de 1 veterinario ou 5 de 3 — e nao existe
+ * "meia clinica". Isso torna o problema um empacotamento capacitado com peso,
+ * nao uma particao de tamanho fixo.
+ *
+ * Pipeline:
  *  1. k-means++ para inicializar centroides bem espalhados;
- *  2. atribuicao por "regret" (arrependimento): quem tem mais a perder se nao
- *     ficar no seu melhor cluster escolhe primeiro, respeitando a capacidade;
- *  3. recalcula centroides e repete ate estabilizar;
- *  4. multiplos restarts, mantendo a melhor inercia.
+ *  2. atribuicao gulosa por "regret" (arrependimento) — quem mais perde se nao
+ *     ficar no seu melhor cluster decide primeiro — respeitando o teto de
+ *     visitas e nao o numero de paradas;
+ *  3. reparo: move clinicas de dias estourados para dias com folga, escolhendo
+ *     sempre o movimento geograficamente mais barato;
+ *  4. recalcula centroides e repete ate estabilizar;
+ *  5. multiplos restarts, mantendo a melhor combinacao de compacidade e
+ *     respeito aos limites.
  *
- * O passo 2 e o que impede o resultado degenerado: sem ele, o cluster mais
- * atraente lota e os ultimos pontos sao empurrados para qualquer lugar.
+ * O passo 3 e o que o peso torna indispensavel: sem ele, uma clinica de 6
+ * veterinarios que chega tarde na ordem de decisao nao cabe em lugar nenhum.
  */
 export function balancedKMeans(
   points: ClusterPoint[],
-  capacities: number[],
+  bounds: CapacityBounds,
   seed: number,
   restarts = OPTIMIZATION_LIMITS.kmeansRestarts,
 ): ClusterResult {
-  const k = capacities.length;
-  if (k === 0) return { clusters: [], centroids: [], inertia: 0 };
+  const k = bounds.targets.length;
+  if (k === 0) {
+    return { clusters: [], centroids: [], inertia: 0, loads: [], capacityViolation: 0 };
+  }
   if (points.length === 0) {
-    return { clusters: capacities.map(() => []), centroids: capacities.map(() => [0, 0]), inertia: 0 };
+    return {
+      clusters: bounds.targets.map(() => []),
+      centroids: bounds.targets.map(() => [0, 0] as [number, number]),
+      inertia: 0,
+      loads: bounds.targets.map(() => 0),
+      capacityViolation: 0,
+    };
   }
 
   const projection = createProjection(points);
   const coords = points.map((p) => projection.project(p));
+  const weights = points.map((p) => Math.max(1, Math.round(p.weight || 1)));
 
   let best: ClusterResult | null = null;
 
@@ -56,7 +89,8 @@ export function balancedKMeans(
     let clusters: number[][] = [];
 
     for (let iter = 0; iter < OPTIMIZATION_LIMITS.balancedAssignmentMaxIterations; iter += 1) {
-      const next = assignByRegret(coords, centroids, capacities);
+      let next = assignByRegret(coords, weights, centroids, bounds);
+      next = repairCapacity(next, coords, weights, centroids, bounds);
       const changed = !sameAssignment(clusters, next);
       clusters = next;
       centroids = recomputeCentroids(coords, clusters, centroids);
@@ -64,12 +98,79 @@ export function balancedKMeans(
     }
 
     const inertia = computeInertia(coords, clusters, centroids);
-    if (!best || inertia < best.inertia) {
-      best = { clusters, centroids, inertia };
+    const loads = clusters.map((members) => members.reduce((sum, i) => sum + weights[i], 0));
+    const capacityViolation = loads.reduce(
+      (sum, load) => sum + Math.max(0, load - bounds.max) + Math.max(0, bounds.min - load),
+      0,
+    );
+
+    // Respeitar os limites vale mais que compacidade: uma solucao compacta que
+    // estoura o dia do usuario nao serve.
+    const cost = inertia + capacityViolation * 1e12;
+    const bestCost = best ? best.inertia + best.capacityViolation * 1e12 : Infinity;
+    if (cost < bestCost) {
+      best = { clusters, centroids, inertia, loads, capacityViolation };
     }
   }
 
   return best!;
+}
+
+/**
+ * Reparo de capacidade.
+ *
+ * A atribuicao gulosa pode deixar dias acima do teto (quando uma clinica
+ * pesada nao coube em lugar nenhum) ou abaixo do minimo. Aqui movemos clinicas
+ * do dia mais sobrecarregado para o dia com folga que custe menos
+ * geograficamente. Preferimos mover a clinica cujo deslocamento de centroide e
+ * menor — normalmente uma que ja estava na fronteira entre duas regioes.
+ */
+function repairCapacity(
+  clusters: number[][],
+  coords: Array<[number, number]>,
+  weights: number[],
+  centroids: Array<[number, number]>,
+  bounds: CapacityBounds,
+): number[][] {
+  const result = clusters.map((c) => [...c]);
+  const load = result.map((members) => members.reduce((sum, i) => sum + weights[i], 0));
+
+  for (let pass = 0; pass < OPTIMIZATION_LIMITS.capacityRepairPasses; pass += 1) {
+    // Dia mais acima do teto.
+    let source = -1;
+    let worstExcess = 0;
+    for (let i = 0; i < result.length; i += 1) {
+      const excess = load[i] - bounds.max;
+      if (excess > worstExcess) {
+        worstExcess = excess;
+        source = i;
+      }
+    }
+    if (source === -1) break;
+
+    let bestMove: { pointIndex: number; target: number; cost: number } | null = null;
+
+    for (const pointIndex of result[source]) {
+      const weight = weights[pointIndex];
+      for (let target = 0; target < result.length; target += 1) {
+        if (target === source) continue;
+        if (load[target] + weight > bounds.max) continue;
+        const cost =
+          squaredDistance(coords[pointIndex], centroids[target]) -
+          squaredDistance(coords[pointIndex], centroids[source]);
+        if (!bestMove || cost < bestMove.cost) bestMove = { pointIndex, target, cost };
+      }
+    }
+
+    if (!bestMove) break;
+
+    result[source] = result[source].filter((i) => i !== bestMove!.pointIndex);
+    result[bestMove.target].push(bestMove.pointIndex);
+    load[source] -= weights[bestMove.pointIndex];
+    load[bestMove.target] += weights[bestMove.pointIndex];
+  }
+
+  return result;
 }
 
 /** k-means++ : escolhe sementes proporcionalmente ao quadrado da distancia. */
@@ -113,48 +214,72 @@ function kMeansPlusPlusInit(
 }
 
 /**
- * Atribuicao capacitada por arrependimento.
+ * Atribuicao capacitada por arrependimento, ponderada por veterinarios.
  *
  * regret(p) = distancia ao 2o melhor cluster - distancia ao melhor cluster.
- * Pontos com regret alto sao os que "sofrem" mais se perderem a vaga, entao
- * decidem primeiro. E uma aproximacao gulosa barata do transporte otimo, e na
- * pratica produz clusters visualmente coerentes.
+ * Pontos com regret alto sao os que mais "sofrem" se perderem a vaga, entao
+ * decidem primeiro. E uma aproximacao gulosa barata do transporte otimo.
+ *
+ * Duas adaptacoes por causa do peso:
+ *  - a vaga so e valida se `restante >= veterinarios da clinica`;
+ *  - em caso de empate no regret, a clinica MAIS PESADA decide primeiro.
+ *    Clinicas grandes sao as dificeis de encaixar; deixa-las para o fim e o
+ *    caminho garantido para o estouro.
  */
 function assignByRegret(
   coords: Array<[number, number]>,
+  weights: number[],
   centroids: Array<[number, number]>,
-  capacities: number[],
+  bounds: CapacityBounds,
 ): number[][] {
   const k = centroids.length;
-  const remaining = [...capacities];
+  const remaining = bounds.targets.map((target) => Math.min(bounds.max, Math.max(target, bounds.min)));
+  const load = new Array<number>(k).fill(0);
   const clusters: number[][] = Array.from({ length: k }, () => []);
 
   const ranked = coords.map((coord, index) => {
     const distances = centroids.map((c, ci) => ({ ci, d: squaredDistance(coord, c) }));
     distances.sort((a, b) => a.d - b.d);
     const regret = distances.length > 1 ? Math.sqrt(distances[1].d) - Math.sqrt(distances[0].d) : 0;
-    return { index, order: distances.map((d) => d.ci), regret };
+    return { index, order: distances.map((d) => d.ci), regret, weight: weights[index] };
   });
 
-  ranked.sort((a, b) => b.regret - a.regret || a.index - b.index);
+  ranked.sort((a, b) => b.regret - a.regret || b.weight - a.weight || a.index - b.index);
 
   for (const item of ranked) {
     let placed = false;
+
+    // 1a tentativa: cabe dentro do alvo do dia.
     for (const ci of item.order) {
-      if (remaining[ci] > 0) {
+      if (remaining[ci] >= item.weight) {
         clusters[ci].push(item.index);
-        remaining[ci] -= 1;
+        remaining[ci] -= item.weight;
+        load[ci] += item.weight;
         placed = true;
         break;
       }
     }
+
+    // 2a tentativa: cabe dentro do teto duro, mesmo passando do alvo.
     if (!placed) {
-      // Capacidade total < numero de pontos: coloca no cluster menos cheio.
-      let target = 0;
-      for (let i = 1; i < k; i += 1) {
-        if (clusters[i].length < clusters[target].length) target = i;
+      for (const ci of item.order) {
+        if (load[ci] + item.weight <= bounds.max) {
+          clusters[ci].push(item.index);
+          remaining[ci] = Math.max(0, remaining[ci] - item.weight);
+          load[ci] += item.weight;
+          placed = true;
+          break;
+        }
       }
+    }
+
+    // Ultimo recurso: dia menos carregado. O reparo cuida do estouro depois.
+    if (!placed) {
+      let target = 0;
+      for (let i = 1; i < k; i += 1) if (load[i] < load[target]) target = i;
       clusters[target].push(item.index);
+      load[target] += item.weight;
+      remaining[target] = Math.max(0, remaining[target] - item.weight);
     }
   }
 

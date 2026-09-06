@@ -17,8 +17,27 @@ export interface ScheduleOptions {
   workEndTime: string;
   lunchStart?: string | null;
   lunchEnd?: string | null;
+  /** Duracao base do atendimento (primeiro veterinario). */
   visitDurationMinutes: number;
+  /** Minutos adicionais por veterinario alem do primeiro. */
+  minutesPerExtraVeterinarian: number;
   bufferMinutes: number;
+}
+
+/**
+ * Duracao de uma parada em funcao do numero de veterinarios.
+ *
+ * Falar com 3 veterinarios na mesma clinica nao leva 3x o tempo — a chegada, a
+ * espera e a montagem do material acontecem uma vez so — mas tambem nao leva o
+ * mesmo tempo de falar com um. Modelamos como base + incremento por
+ * veterinario extra, ambos configuraveis.
+ */
+export function stopDurationMinutes(
+  veterinarians: number,
+  options: Pick<ScheduleOptions, 'visitDurationMinutes' | 'minutesPerExtraVeterinarian'>,
+): number {
+  const vets = Math.max(1, Math.round(veterinarians || 1));
+  return options.visitDurationMinutes + (vets - 1) * options.minutesPerExtraVeterinarian;
 }
 
 export function parseTimeToMinutes(value: string): number {
@@ -35,7 +54,7 @@ export function minutesToTime(minutes: number): string {
 }
 
 export function buildSchedule(
-  travelSecondsToEachStop: number[],
+  stops: Array<{ travelSeconds: number; veterinarians: number }>,
   options: ScheduleOptions,
 ): ScheduleSlot[] {
   const start = parseTimeToMinutes(options.workStartTime);
@@ -45,8 +64,8 @@ export function buildSchedule(
   const slots: ScheduleSlot[] = [];
   let cursor = start;
 
-  for (const travelSeconds of travelSecondsToEachStop) {
-    cursor += travelSeconds / 60;
+  for (const stop of stops) {
+    cursor += stop.travelSeconds / 60;
 
     // Se a chegada cair dentro do almoco, empurra para o fim do intervalo.
     if (lunchStart !== null && lunchEnd !== null && cursor >= lunchStart && cursor < lunchEnd) {
@@ -54,11 +73,12 @@ export function buildSchedule(
     }
 
     const arrival = cursor;
-    let departure = arrival + options.visitDurationMinutes;
+    const duration = stopDurationMinutes(stop.veterinarians, options);
+    let departure = arrival + duration;
 
     // Uma visita que comeca antes e atravessa o almoco tambem e empurrada.
     if (lunchStart !== null && lunchEnd !== null && arrival < lunchStart && departure > lunchStart) {
-      departure = lunchEnd + options.visitDurationMinutes;
+      departure = lunchEnd + duration;
     }
 
     slots.push({ arrivalMinutes: arrival, departureMinutes: departure });

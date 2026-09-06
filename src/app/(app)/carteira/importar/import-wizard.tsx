@@ -34,6 +34,8 @@ const CANONICAL = [
   { field: 'phone', label: 'Telefone', required: false },
   { field: 'latitude', label: 'Latitude', required: false },
   { field: 'longitude', label: 'Longitude', required: false },
+  { field: 'veterinarians', label: 'Quantidade de veterinários', required: false },
+  { field: 'visitSplits', label: 'Dividir visita em quantas partes', required: false },
   { field: 'notes', label: 'Observações', required: false },
   { field: 'active', label: 'Ativo', required: false },
 ] as const;
@@ -63,6 +65,8 @@ interface ReviewRow {
   city: string | null;
   latitude: number | null;
   longitude: number | null;
+  veterinarians: number;
+  visitSplits: number;
   geocodeStatus: string;
   geocodeLabel: string | null;
   geocodeCandidates: Array<{ lat: number; lng: number; label: string }>;
@@ -515,9 +519,17 @@ function ReviewStep({
 
                     <div className="flex shrink-0 flex-col items-end gap-1.5">
                       {row.category ? (
-                        <Badge tone={row.category === 'CAT1' ? 'cat1' : row.category === 'CAT2' ? 'cat2' : 'cat3'}>
-                          {row.category.replace('CAT', 'Cat ')}
-                        </Badge>
+                        <div className="flex items-center gap-1.5">
+                          {row.veterinarians > 1 && (
+                            <span className="text-[10px] font-medium text-ink-400">
+                              {row.veterinarians} vet{row.veterinarians > 1 ? 's' : ''}
+                              {row.visitSplits > 1 ? ` · ${row.visitSplits}x` : ''}
+                            </span>
+                          )}
+                          <Badge tone={row.category === 'CAT1' ? 'cat1' : row.category === 'CAT2' ? 'cat2' : 'cat3'}>
+                            {row.category.replace('CAT', 'Cat ')}
+                          </Badge>
+                        </div>
                       ) : (
                         <Select
                           value={override.category ?? ''}

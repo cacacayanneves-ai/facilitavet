@@ -60,7 +60,9 @@ export interface SettingsLike {
   lunchStart: string | null;
   lunchEnd: string | null;
   visitDurationMinutes: number;
+  minutesPerExtraVeterinarian?: number;
   bufferMinutes: number;
+  minDaysBetweenSplitVisits?: number;
   minVisitsPerDay: number;
   maxVisitsPerDay: number;
   scoreWeights: unknown;
@@ -72,7 +74,10 @@ export function toPlannerPreferences(settings: SettingsLike, seed: number): Plan
     minVisitsPerDay: settings.minVisitsPerDay,
     maxVisitsPerDay: settings.maxVisitsPerDay,
     visitDurationMinutes: settings.visitDurationMinutes,
+    minutesPerExtraVeterinarian:
+      settings.minutesPerExtraVeterinarian ?? DEFAULT_PREFERENCES.minutesPerExtraVeterinarian,
     bufferMinutes: settings.bufferMinutes,
+    minDaysBetweenSplitVisits: settings.minDaysBetweenSplitVisits ?? DEFAULT_PREFERENCES.minDaysBetweenSplitVisits,
     workStartTime: settings.workStartTime,
     workEndTime: settings.workEndTime,
     lunchStart: settings.lunchStart,

@@ -36,15 +36,27 @@ export async function loadRouteContext(routeId: string, userId: string) {
   return { route, user, settings: user.settings };
 }
 
-function toPlannerClinic(clinic: {
-  id: string;
-  name: string;
-  category: string;
-  neighborhood: string | null;
-  city: string | null;
-  latitude: number | null;
-  longitude: number | null;
-}): PlannerClinic {
+function toPlannerClinic(
+  clinic: {
+    id: string;
+    name: string;
+    category: string;
+    neighborhood: string | null;
+    city: string | null;
+    latitude: number | null;
+    longitude: number | null;
+    veterinarians: number;
+  },
+  /**
+   * Parte da visita que ESTA parada representa. Ao reordenar, preserva-se a
+   * parte original da clinica (uma edicao de ordem nao pode transformar a
+   * parte 2 de uma visita dividida na parte 1). Ao trocar por uma clinica
+   * nova, usa-se o padrao 1/1 — a substituicao e ad-hoc, sem historico de
+   * divisao nesta rota.
+   */
+  part = 1,
+  totalParts = 1,
+): PlannerClinic {
   return {
     id: clinic.id,
     name: clinic.name,
@@ -53,14 +65,27 @@ function toPlannerClinic(clinic: {
     city: clinic.city,
     lat: clinic.latitude ?? Number.NaN,
     lng: clinic.longitude ?? Number.NaN,
+    veterinarians: clinic.veterinarians,
+    splitPart: part,
+    splitTotal: totalParts,
   };
 }
 
 export interface ReorderResult {
+  totalVisits: number;
+  totalStops: number;
   totalDistanceMeters: number;
   totalDurationSeconds: number;
   score: number;
-  stops: Array<{ clinicId: string; sequence: number; estimatedArrival: string; distanceFromPreviousMeters: number }>;
+  stops: Array<{
+    clinicId: string;
+    sequence: number;
+    estimatedArrival: string;
+    distanceFromPreviousMeters: number;
+    veterinarians: number;
+    part: number;
+    totalParts: number;
+  }>;
 }
 
 /** Aplica uma nova ordem (arrastar e soltar) e recalcula tudo. */
@@ -76,6 +101,10 @@ export async function reorderRoute(args: {
   const { route, settings } = context;
 
   const byId = new Map(route.stops.map((s) => [s.clinicId, s.clinic]));
+  // Preserva a parte da visita (splitPart/splitTotal) de cada parada:
+  // reordenar dentro do dia nao pode alterar qual parte de uma visita
+  // dividida cada parada representa.
+  const partByClinicId = new Map(route.stops.map((s) => [s.clinicId, { part: s.part, totalParts: s.totalParts }]));
   const ordered = args.clinicIdsInOrder
     .map((id) => byId.get(id))
     .filter((c): c is NonNullable<typeof c> => Boolean(c));
@@ -87,7 +116,10 @@ export async function reorderRoute(args: {
   return applyRoute({
     routeId: route.id,
     dateKey: route.date.toISOString().slice(0, 10),
-    clinics: ordered.map(toPlannerClinic),
+    clinics: ordered.map((clinic) => {
+      const parts = partByClinicId.get(clinic.id);
+      return toPlannerClinic(clinic, parts?.part, parts?.totalParts);
+    }),
     origin: route.originLatitude !== null && route.originLongitude !== null
       ? { lat: route.originLatitude, lng: route.originLongitude }
       : null,
@@ -134,7 +166,9 @@ export async function swapStop(args: {
   }
 
   const clinics = route.stops.map((stop) =>
-    stop.sequence === args.sequence ? toPlannerClinic(replacement) : toPlannerClinic(stop.clinic),
+    stop.sequence === args.sequence
+      ? toPlannerClinic(replacement)
+      : toPlannerClinic(stop.clinic, stop.part, stop.totalParts),
   );
 
   return applyRoute({
@@ -209,7 +243,7 @@ export async function alternativesForStop(args: {
           : null,
     },
     replaceSequence: args.sequence,
-    pool: pool.map(toPlannerClinic),
+    pool: pool.map((clinic) => toPlannerClinic(clinic)),
     limit: args.limit ?? 6,
   }).map((item) => ({
     clinicId: item.clinic.id,
@@ -251,6 +285,8 @@ async function applyRoute(args: {
     await tx.route.update({
       where: { id: args.routeId },
       data: {
+        totalVisits: recalculated.totalVisits,
+        totalStops: recalculated.totalStops,
         totalDistanceMeters: recalculated.totalDistanceMeters,
         totalDurationSeconds: recalculated.totalDurationSeconds,
         score: recalculated.score,
@@ -280,6 +316,9 @@ async function applyRoute(args: {
           clinicId: stop.clinicId,
           visitId,
           sequence: stop.sequence,
+          veterinarians: stop.veterinarians,
+          part: stop.part,
+          totalParts: stop.totalParts,
           estimatedArrival: arrival,
           estimatedDeparture: combineDateAndTime(args.dateKey, stop.estimatedDeparture),
           distanceFromPreviousMeters: stop.distanceFromPreviousMeters,
@@ -290,7 +329,14 @@ async function applyRoute(args: {
       if (visitId) {
         await tx.visit.update({
           where: { id: visitId },
-          data: { sequence: stop.sequence, estimatedArrival: arrival, clinicId: stop.clinicId },
+          data: {
+            sequence: stop.sequence,
+            estimatedArrival: arrival,
+            clinicId: stop.clinicId,
+            veterinarians: stop.veterinarians,
+            part: stop.part,
+            totalParts: stop.totalParts,
+          },
         });
       } else {
         // Clinica nova entrou pela troca: cria a visita correspondente.
@@ -303,6 +349,9 @@ async function applyRoute(args: {
             date: route.date,
             category: stop.category,
             sequence: stop.sequence,
+            veterinarians: stop.veterinarians,
+            part: stop.part,
+            totalParts: stop.totalParts,
             estimatedArrival: arrival,
           },
         });
@@ -335,6 +384,8 @@ async function applyRoute(args: {
   });
 
   return {
+    totalVisits: recalculated.totalVisits,
+    totalStops: recalculated.totalStops,
     totalDistanceMeters: recalculated.totalDistanceMeters,
     totalDurationSeconds: recalculated.totalDurationSeconds,
     score: recalculated.score,
@@ -343,6 +394,9 @@ async function applyRoute(args: {
       sequence: s.sequence,
       estimatedArrival: s.estimatedArrival,
       distanceFromPreviousMeters: s.distanceFromPreviousMeters,
+      veterinarians: s.veterinarians,
+      part: s.part,
+      totalParts: s.totalParts,
     })),
   };
 }
@@ -352,6 +406,8 @@ type TxClient = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
 /** Recalcula os totais do mes a partir das rotas. */
 export async function refreshPlanTotals(tx: TxClient, monthlyPlanId: string): Promise<void> {
   const routes = await tx.route.findMany({ where: { monthlyPlanId } });
+  const totalVisits = routes.reduce((sum, r) => sum + r.totalVisits, 0);
+  const totalStops = routes.reduce((sum, r) => sum + r.totalStops, 0);
   const totalDistance = routes.reduce((sum, r) => sum + r.totalDistanceMeters, 0);
   const totalDuration = routes.reduce((sum, r) => sum + r.totalDurationSeconds, 0);
   const scored = routes.filter((r) => r.score > 0);
@@ -360,6 +416,8 @@ export async function refreshPlanTotals(tx: TxClient, monthlyPlanId: string): Pr
   await tx.monthlyPlan.update({
     where: { id: monthlyPlanId },
     data: {
+      totalVisits,
+      totalStops,
       totalDistanceMeters: totalDistance,
       totalDurationSeconds: totalDuration,
       averageScore: Math.round(averageScore * 10) / 10,

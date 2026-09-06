@@ -9,9 +9,12 @@ export interface DayCapacityPlan {
 /**
  * DISTRIBUICAO DA META PELOS DIAS (secoes 18 e 19).
  *
- * Regra de produto: 100 visitas em 17 dias NAO vira "6,6,6,6,6,6,6,6,6,6,6,4".
- * Vira uma mistura equilibrada de 5 e 6 — e a soma tem que fechar exatamente
- * em 100.
+ * Distribui VISITAS (veterinarios), nao clinicas. 160 visitas em 20 dias vira
+ * uma mistura equilibrada de 8 — e a soma fecha exatamente em 160.
+ *
+ * Este alvo e SOFT: como as clinicas sao atomicas e tem pesos diferentes, a
+ * clusterizacao raramente fecha o alvo exato de cada dia. Os limites duros sao
+ * min/max por dia; o alvo apenas orienta o empacotamento.
  *
  * Implementacao: base = floor(N/D), resto = N%D. Os `resto` dias que recebem a
  * visita extra sao escolhidos de forma ESPALHADA pelo mes (distribuicao de

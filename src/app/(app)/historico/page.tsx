@@ -27,10 +27,16 @@ export default async function HistoryPage({
       by: ['status'],
       where: { userId: user.id },
       _count: true,
+      _sum: { veterinarians: true },
     }),
   ]);
 
-  const byStatus = Object.fromEntries(totals.map((t) => [t.status, t._count])) as Record<string, number>;
+  // Visitas contam veterinarios, nao paradas — uma clinica com 4 veterinarios
+  // concluida vale 4 aqui, consistente com a meta mensal.
+  const byStatus = Object.fromEntries(totals.map((t) => [t.status, t._sum.veterinarians ?? 0])) as Record<
+    string,
+    number
+  >;
 
   const selectedClinic = params.clinic
     ? await prisma.clinic.findFirst({

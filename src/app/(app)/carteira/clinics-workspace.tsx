@@ -31,6 +31,8 @@ export interface ClinicRow {
   active: boolean;
   latitude: number | null;
   longitude: number | null;
+  veterinarians: number;
+  visitSplits: number;
   geocodeStatus: string;
   lastVisitedAt: string | null;
   nextVisitDate: string | null;
@@ -49,6 +51,7 @@ export function ClinicsWorkspace({
   const [search, setSearch] = React.useState('');
   const [filter, setFilter] = React.useState<Filter>('ALL');
   const [creating, setCreating] = React.useState(false);
+  const [editingVets, setEditingVets] = React.useState<ClinicRow | null>(null);
 
   const withoutLocation = clinics.filter((c) => c.active && c.latitude === null).length;
 
@@ -141,6 +144,7 @@ export function ClinicsWorkspace({
                 <tr className="border-b border-ink-200 text-[10px] font-semibold uppercase tracking-wide text-ink-400">
                   <th className="px-5 py-2.5">Clínica</th>
                   <th className="px-3 py-2.5">Categoria</th>
+                  <th className="px-3 py-2.5">Vets</th>
                   <th className="px-3 py-2.5">Bairro</th>
                   <th className="px-3 py-2.5">Última visita</th>
                   <th className="px-3 py-2.5">Próxima</th>
@@ -157,6 +161,18 @@ export function ClinicsWorkspace({
                     </td>
                     <td className="px-3 py-2.5">
                       <CategoryBadge category={clinic.category} />
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <button
+                        onClick={() => setEditingVets(clinic)}
+                        className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium text-ink-700 transition-colors hover:bg-ink-100"
+                        title="Editar veterinários e divisão de visita"
+                      >
+                        {clinic.veterinarians}
+                        {clinic.visitSplits > 1 && (
+                          <span className="text-[10px] font-normal text-ink-400">÷{clinic.visitSplits}</span>
+                        )}
+                      </button>
                     </td>
                     <td className="px-3 py-2.5 text-xs text-ink-600">
                       {clinic.neighborhood ?? '—'}
@@ -204,7 +220,113 @@ export function ClinicsWorkspace({
       </Card>
 
       <NewClinicDialog open={creating} onClose={() => setCreating(false)} onSaved={() => router.refresh()} />
+      <EditVeterinariansDialog
+        clinic={editingVets}
+        onClose={() => setEditingVets(null)}
+        onSaved={() => router.refresh()}
+      />
     </div>
+  );
+}
+
+/**
+ * Edicao de veterinarios e divisao de visita (secao central do produto: a
+ * meta conta visitas por veterinario, e algumas clinicas tem a visita
+ * dividida em partes separadas por um intervalo minimo de dias).
+ */
+function EditVeterinariansDialog({
+  clinic,
+  onClose,
+  onSaved,
+}: {
+  clinic: ClinicRow | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [veterinarians, setVeterinarians] = React.useState(1);
+  const [visitSplits, setVisitSplits] = React.useState(1);
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (clinic) {
+      setVeterinarians(clinic.veterinarians);
+      setVisitSplits(clinic.visitSplits);
+      setError(null);
+    }
+  }, [clinic]);
+
+  async function save() {
+    if (!clinic) return;
+    setSaving(true);
+    setError(null);
+
+    const response = await fetch(`/api/clinics/${clinic.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ veterinarians, visitSplits }),
+    });
+    setSaving(false);
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      setError(data.error ?? 'Não foi possível salvar.');
+      return;
+    }
+
+    onSaved();
+    onClose();
+  }
+
+  return (
+    <Dialog
+      open={Boolean(clinic)}
+      onClose={onClose}
+      title="Veterinários e divisão de visita"
+      description={clinic?.name}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>Cancelar</Button>
+          <Button onClick={save} loading={saving}>Salvar</Button>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        {error && <Alert tone="danger">{error}</Alert>}
+
+        <Field
+          label="Quantidade de veterinários"
+          hint="A meta mensal conta visitas por veterinário: esta clínica vale essa quantidade de visitas numa única passagem."
+        >
+          <Input
+            type="number"
+            min={1}
+            max={100}
+            value={veterinarians}
+            onChange={(e) => {
+              const value = Math.max(1, Number(e.target.value) || 1);
+              setVeterinarians(value);
+              if (visitSplits > value) setVisitSplits(1);
+            }}
+          />
+        </Field>
+
+        <Field
+          label="Dividir a visita em quantas partes"
+          hint="Cada parte é agendada em um dia diferente, com pelo menos o intervalo mínimo configurado (padrão 7 dias)."
+        >
+          <Select
+            value={String(visitSplits)}
+            onChange={(e) => setVisitSplits(Number(e.target.value))}
+          >
+            <option value="1">Não dividir</option>
+            {Array.from({ length: Math.min(veterinarians, 4) - 1 }, (_, i) => i + 2).map((n) => (
+              <option key={n} value={n}>{n} partes</option>
+            ))}
+          </Select>
+        </Field>
+      </div>
+    </Dialog>
   );
 }
 
@@ -225,6 +347,7 @@ function NewClinicDialog({
     city: 'São Paulo',
     state: 'SP',
     phone: '',
+    veterinarians: 1,
   });
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -289,6 +412,18 @@ function NewClinicDialog({
               <option value="CAT3">Cat 3 — alternada</option>
             </Select>
           </Field>
+          <Field label="Veterinários" hint="Quantas visitas esta clínica vale.">
+            <Input
+              type="number"
+              min={1}
+              max={100}
+              value={form.veterinarians}
+              onChange={(e) => setForm({ ...form, veterinarians: Math.max(1, Number(e.target.value) || 1) })}
+            />
+          </Field>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
           <Field label="Telefone">
             <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
           </Field>

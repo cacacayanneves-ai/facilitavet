@@ -4,11 +4,17 @@ import type { LatLng, RouteScoreBreakdown, ScoreWeights } from './types';
 export interface ScoreInput {
   origin: LatLng | null;
   destination: LatLng | null;
+  /** Paradas (clinicas) do dia — usadas para backtracking, desvio, concentracao e normalizacao. */
   stops: LatLng[];
   totalDistanceMeters: number;
   totalDurationSeconds: number;
-  /** Meta de visitas do dia — usada para penalizar desequilibrio. */
-  targetStops: number;
+  /**
+   * Visitas (veterinarios) contabilizadas no dia. Pode ser maior que
+   * `stops.length` quando alguma clinica tem mais de um veterinario.
+   */
+  totalVisits: number;
+  /** Meta de VISITAS (veterinarios) do dia — usada para penalizar desequilibrio. */
+  targetVisits: number;
   weights: ScoreWeights;
   estimated: boolean;
 }
@@ -37,7 +43,9 @@ export function scoreRoute(input: ScoreInput): RouteScoreBreakdown {
   const km = input.totalDistanceMeters / 1000;
   const detourKm = detourMeters / 1000;
   const concentrationKm = concentrationMeters / 1000;
-  const balanceGap = Math.abs(stops.length - input.targetStops);
+  // O desequilibrio e medido em VISITAS, nao em paradas: a meta diaria que o
+  // usuario configura (min/maxVisitsPerDay) conta veterinarios.
+  const balanceGap = Math.abs(input.totalVisits - input.targetVisits);
 
   const cost =
     minutes * weights.duration +
@@ -47,6 +55,11 @@ export function scoreRoute(input: ScoreInput): RouteScoreBreakdown {
     concentrationKm * weights.concentration +
     balanceGap * weights.balance;
 
+  // Normalizamos pelo numero de PARADAS (nao de visitas): distancia, tempo e
+  // backtracking escalam com deslocamentos entre clinicas, nao com quantos
+  // veterinarios cada uma tem. Sem isso, uma clinica concentrada de 6
+  // veterinarios "pontuaria pior" so por acumular mais minutos de atendimento,
+  // o que nao reflete qualidade de ROTEIRIZACAO.
   const perStop = stops.length > 0 ? cost / stops.length : cost;
   const score = normalizeScore(perStop);
 

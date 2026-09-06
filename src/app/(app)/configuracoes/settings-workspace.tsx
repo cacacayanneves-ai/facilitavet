@@ -35,7 +35,9 @@ interface Settings {
   lunchStart: string | null;
   lunchEnd: string | null;
   visitDurationMinutes: number;
+  minutesPerExtraVeterinarian: number;
   bufferMinutes: number;
+  minDaysBetweenSplitVisits: number;
   originType: string;
   originAddress: string | null;
   originLatitude: number | null;
@@ -104,7 +106,9 @@ export function SettingsWorkspace(props: {
           lunchStart: settings.lunchStart,
           lunchEnd: settings.lunchEnd,
           visitDurationMinutes: settings.visitDurationMinutes,
+          minutesPerExtraVeterinarian: settings.minutesPerExtraVeterinarian,
           bufferMinutes: settings.bufferMinutes,
+          minDaysBetweenSplitVisits: settings.minDaysBetweenSplitVisits,
         },
         anchors: {
           originType: settings.originType,
@@ -274,13 +278,25 @@ export function SettingsWorkspace(props: {
               </div>
 
               <div className="grid gap-4 border-t border-ink-200 pt-4 sm:grid-cols-2">
-                <Field label="Duração média da visita (min)" hint="Usada para calcular os horários de chegada.">
+                <Field label="Duração média da visita (min)" hint="Para o primeiro veterinário da clínica.">
                   <Input
                     type="number"
                     min={5}
                     max={240}
                     value={settings.visitDurationMinutes}
                     onChange={(e) => setSettings({ ...settings, visitDurationMinutes: Number(e.target.value) })}
+                  />
+                </Field>
+                <Field
+                  label="Minutos por veterinário adicional"
+                  hint="Uma clínica com 3 veterinários ocupa a duração base + 2× este valor."
+                >
+                  <Input
+                    type="number"
+                    min={0}
+                    max={120}
+                    value={settings.minutesPerExtraVeterinarian}
+                    onChange={(e) => setSettings({ ...settings, minutesPerExtraVeterinarian: Number(e.target.value) })}
                   />
                 </Field>
                 <Field label="Folga entre visitas (min)">
@@ -290,6 +306,18 @@ export function SettingsWorkspace(props: {
                     max={120}
                     value={settings.bufferMinutes}
                     onChange={(e) => setSettings({ ...settings, bufferMinutes: Number(e.target.value) })}
+                  />
+                </Field>
+                <Field
+                  label="Intervalo mínimo entre partes de uma visita dividida (dias)"
+                  hint="Clínicas com visita dividida (Carteira) nunca recebem as duas partes em menos dias que este valor."
+                >
+                  <Input
+                    type="number"
+                    min={1}
+                    max={60}
+                    value={settings.minDaysBetweenSplitVisits}
+                    onChange={(e) => setSettings({ ...settings, minDaysBetweenSplitVisits: Number(e.target.value) })}
                   />
                 </Field>
               </div>

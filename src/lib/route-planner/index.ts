@@ -9,4 +9,5 @@ export * from './scoring';
 export * from './schedule';
 export * from './sequencing';
 export { generatePlan, recalculateRoute, suggestAlternatives } from './planner';
+export { expandSplitClinics, splitVeterinarianCount, isSplitPartId, realClinicId } from './split-visits';
 export { estimateMatrix, estimateTravel, haversineMeters, centroid, meanRadiusMeters, createProjection } from './geo';
