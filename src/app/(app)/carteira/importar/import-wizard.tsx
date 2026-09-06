@@ -10,6 +10,7 @@ import {
   Card,
   CardContent,
   Field,
+  Input,
   Select,
   Spinner,
 } from '@/components/ui';
@@ -501,10 +502,18 @@ function ReviewStep({
                           </p>
                         ))}
                         {row.latitude === null && row.geocodeStatus === 'FAILED' && (
-                          <p className="flex items-start gap-1.5 text-[11px] text-[var(--color-warning-text)]">
-                            <MapPin className="mt-px size-3 shrink-0" />
-                            {row.geocodeLabel ?? 'Não foi possível localizar.'}
-                          </p>
+                          <>
+                            <p className="flex items-start gap-1.5 text-[11px] text-[var(--color-warning-text)]">
+                              <MapPin className="mt-px size-3 shrink-0" />
+                              {row.geocodeLabel ?? 'Não foi possível localizar.'}
+                            </p>
+                            <ManualCoordinates
+                              value={override}
+                              onChange={(next) =>
+                                setOverrides((prev) => ({ ...prev, [row.index]: { ...prev[row.index], ...next } }))
+                              }
+                            />
+                          </>
                         )}
                       </div>
 
@@ -595,6 +604,60 @@ function ReviewStep({
           Importar {s.valid} clínica{s.valid === 1 ? '' : 's'}
         </Button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Localizacao manual quando o Google nao conseguiu geocodificar (ex: chave
+ * sem faturamento ativo). Nao depende de nenhuma API: o usuario abre o local
+ * no maps.google.com normal, clica com o botao direito no pino e copia as
+ * coordenadas que aparecem no menu — funciona mesmo com a integracao do
+ * Google fora do ar.
+ */
+function ManualCoordinates({
+  value,
+  onChange,
+}: {
+  value: { latitude?: number; longitude?: number };
+  onChange: (next: { latitude?: number; longitude?: number }) => void;
+}) {
+  const [lat, setLat] = React.useState(value.latitude !== undefined ? String(value.latitude) : '');
+  const [lng, setLng] = React.useState(value.longitude !== undefined ? String(value.longitude) : '');
+
+  function update(nextLat: string, nextLng: string) {
+    setLat(nextLat);
+    setLng(nextLng);
+    const parsedLat = Number(nextLat.replace(',', '.'));
+    const parsedLng = Number(nextLng.replace(',', '.'));
+    const valid = nextLat.trim() !== '' && nextLng.trim() !== '' && Number.isFinite(parsedLat) && Number.isFinite(parsedLng);
+    onChange(valid ? { latitude: parsedLat, longitude: parsedLng } : { latitude: undefined, longitude: undefined });
+  }
+
+  const filled = value.latitude !== undefined && value.longitude !== undefined;
+
+  return (
+    <div className="mt-1.5">
+      <div className="flex items-center gap-1.5">
+        <Input
+          placeholder="Latitude"
+          value={lat}
+          onChange={(e) => update(e.target.value, lng)}
+          className="h-7 w-24 text-[11px]"
+          inputMode="decimal"
+        />
+        <Input
+          placeholder="Longitude"
+          value={lng}
+          onChange={(e) => update(lat, e.target.value)}
+          className="h-7 w-24 text-[11px]"
+          inputMode="decimal"
+        />
+        {filled && <Check className="size-3.5 shrink-0 text-[var(--color-positive)]" />}
+      </div>
+      <p className="mt-0.5 text-[10px] text-ink-400">
+        Copie do Google Maps: clique com o botão direito no local e depois nas coordenadas.
+      </p>
     </div>
   );
 }
