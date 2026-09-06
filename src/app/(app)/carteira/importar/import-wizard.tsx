@@ -49,6 +49,8 @@ interface UploadResult {
   mapping: Record<string, string>;
   totalRows: number;
   preview: Array<Record<string, string>>;
+  /** Avisos do processo de leitura — ex.: "3 abas viraram 3 categorias". */
+  notices: string[];
 }
 
 interface RowIssue {
@@ -185,6 +187,16 @@ export function ImportWizard() {
                 {upload.totalRows} linhas. Ajuste o que não corresponder.
               </p>
             </div>
+
+            {upload.notices.length > 0 && (
+              <Alert tone="info" title="Como interpretamos sua planilha">
+                <ul className="list-disc space-y-1 pl-4">
+                  {upload.notices.map((notice, i) => (
+                    <li key={i}>{notice}</li>
+                  ))}
+                </ul>
+              </Alert>
+            )}
 
             <div className="grid gap-3 sm:grid-cols-2">
               {CANONICAL.map((item) => (

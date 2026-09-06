@@ -80,6 +80,8 @@ const FIELD_SYNONYMS: Record<CanonicalField, string[]> = {
 export interface ParsedSheet {
   columns: string[];
   rows: Array<Record<string, string>>;
+  /** Avisos do PROCESSO de leitura (ex.: agregação por veterinário), não das linhas. */
+  notices: string[];
 }
 
 /** Le XLSX ou CSV a partir do buffer enviado. */
@@ -105,15 +107,15 @@ function parseCsv(buffer: Buffer): ParsedSheet {
     return clean;
   });
 
-  return { columns, rows: rows.filter((r) => Object.values(r).some((v) => v.length > 0)) };
+  return {
+    columns,
+    rows: rows.filter((r) => Object.values(r).some((v) => v.length > 0)),
+    notices: [],
+  };
 }
 
-async function parseXlsx(buffer: Buffer): Promise<ParsedSheet> {
-  const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(buffer as unknown as ArrayBuffer);
-  const sheet = workbook.worksheets[0];
-  if (!sheet) return { columns: [], rows: [] };
-
+/** Le uma unica aba no formato "uma linha por clinica" (o formato padrao). */
+function readSheetAsRows(sheet: ExcelJS.Worksheet): ParsedSheet {
   const headerRow = sheet.getRow(1);
   const columns: string[] = [];
   headerRow.eachCell({ includeEmpty: false }, (cell, colNumber) => {
@@ -135,7 +137,247 @@ async function parseXlsx(buffer: Buffer): Promise<ParsedSheet> {
     if (hasValue) rows.push(record);
   });
 
-  return { columns: columns.filter(Boolean), rows };
+  return { columns: columns.filter(Boolean), rows, notices: [] };
+}
+
+async function parseXlsx(buffer: Buffer): Promise<ParsedSheet> {
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(buffer as unknown as ArrayBuffer);
+  const sheets = workbook.worksheets.filter((s) => s.rowCount > 1);
+  if (sheets.length === 0) return { columns: [], rows: [], notices: [] };
+
+  const perVeterinarian = detectPerVeterinarianWorkbook(sheets);
+  if (perVeterinarian) return aggregatePerVeterinarianWorkbook(sheets);
+
+  return readSheetAsRows(sheets[0]);
+}
+
+/**
+ * Formato "uma linha por veterinario, categoria = nome da aba" (secao 8, caso
+ * real de cliente).
+ *
+ * Uma planilha comercial de carteira veterinaria nao chega no formato "uma
+ * linha por clinica": chega como lista de escala/cobertura, com uma linha por
+ * VETERINARIO — a clinica se repete uma vez por profissional que atende nela.
+ * Isso e o dado primario de verdade (quem atende onde), e a contagem de
+ * veterinarios por clinica — que e a unidade real de trabalho do planejador —
+ * nasce de CONTAR essas linhas, nao de uma coluna numerica que ninguem
+ * preencheria a mao para 300+ linhas.
+ *
+ * Reconhecemos o formato por eliminacao: varias abas, cada uma com uma coluna
+ * de clinica E uma coluna de veterinario, e NENHUMA coluna de categoria —
+ * porque nesse formato a categoria e o proprio nome da aba (CAT 1, CAT 2...).
+ * Uma planilha comum (com coluna "Categoria") nunca bate nesse teste e segue
+ * pelo caminho de sempre. Nao exigimos 2+ abas: uma reimportacao de uma unica
+ * categoria (o usuario exportou so a aba "CAT 2", por exemplo) e o mesmo
+ * formato com uma aba so, e a combinacao de colunas ja e um sinal forte o
+ * bastante sozinha.
+ */
+function detectPerVeterinarianWorkbook(sheets: ExcelJS.Worksheet[]): boolean {
+  return sheets.every((sheet) => {
+    const columns = headerColumns(sheet);
+    const roles = detectRoles(columns);
+    return roles.clinic && roles.veterinarian && !roles.category;
+  });
+}
+
+interface SheetRoles {
+  clinic: string | null;
+  veterinarian: string | null;
+  neighborhood: string | null;
+  category: string | null;
+  split: string | null;
+}
+
+const CLINIC_SYNONYMS = ['clinica', 'clinicas', 'nome da clinica', 'estabelecimento'];
+const VETERINARIAN_SYNONYMS = [
+  'nome dos veterinarios', 'nome do veterinario', 'veterinario', 'veterinarios', 'nome veterinario',
+];
+const CATEGORY_SYNONYMS = ['categoria', 'cat', 'classificacao', 'segmento'];
+const NEIGHBORHOOD_SYNONYMS = ['bairro', 'regiao', 'distrito', 'zona'];
+// Coluna livre marcando cobertura por plantao — a mesma clinica tem gente
+// diferente presente em dias diferentes, entao uma visita nao alcanca todos.
+const SPLIT_FLAG_SYNONYMS = ['2 visitas', 'visitas', 'plantao', 'dividir visita', 'split'];
+
+function headerColumns(sheet: ExcelJS.Worksheet): string[] {
+  const headerRow = sheet.getRow(1);
+  const columns: string[] = [];
+  headerRow.eachCell({ includeEmpty: false }, (cell, colNumber) => {
+    columns[colNumber - 1] = String(cell.value ?? '').trim();
+  });
+  return columns.filter(Boolean);
+}
+
+function findColumn(columns: string[], synonyms: string[]): string | null {
+  const normalized = columns.map((c) => ({ raw: c, key: normalizeKey(c) }));
+  const exact = normalized.find((c) => synonyms.includes(c.key));
+  if (exact) return exact.raw;
+  const partial = normalized.find((c) => synonyms.some((s) => c.key.includes(s)));
+  return partial?.raw ?? null;
+}
+
+function detectRoles(columns: string[]): SheetRoles {
+  return {
+    clinic: findColumn(columns, CLINIC_SYNONYMS),
+    veterinarian: findColumn(columns, VETERINARIAN_SYNONYMS),
+    neighborhood: findColumn(columns, NEIGHBORHOOD_SYNONYMS),
+    category: findColumn(columns, CATEGORY_SYNONYMS),
+    split: findColumn(columns, SPLIT_FLAG_SYNONYMS),
+  };
+}
+
+function isTruthyFlag(raw: string): boolean {
+  const value = normalizeKey(raw);
+  return ['sim', 's', 'x', 'yes', 'y', '1', 'true'].includes(value);
+}
+
+/**
+ * Agrega linhas de veterinario em linhas de clinica.
+ *
+ * A chave de agrupamento e (nome, bairro) — nao so o nome. Duas unidades
+ * podem ter o mesmo nome comercial em bairros diferentes (rede de clinicas),
+ * e sao clinicas fisicamente distintas mesmo com o mesmo nome.
+ *
+ * Quando a MESMA clinica (nome + bairro) aparece em mais de uma aba —
+ * categoria misturada por engano ou por profissionais novos ainda sendo
+ * classificados — nao escolhemos uma categoria e descartamos os veterinarios
+ * da outra: eles trabalham na mesma clinica de verdade, entao entram na
+ * contagem total. A categoria da clinica fica sendo a de maior contagem, e o
+ * conflito vira um aviso legivel em vez de sumir silenciosamente.
+ *
+ * Uma linha pode ter clinica sem veterinario nomeado ainda — area nova, em
+ * mapeamento. Essa linha registra a clinica (nao pode sumir da carteira),
+ * mas nao conta como veterinario: nao ha ninguem para contar.
+ */
+function aggregatePerVeterinarianWorkbook(sheets: ExcelJS.Worksheet[]): ParsedSheet {
+  interface Group {
+    name: string;
+    neighborhood: string;
+    veterinarians: number;
+    split: boolean;
+    byCategory: Map<string, number>;
+    pendingRows: number;
+  }
+
+  const groups = new Map<string, Group>();
+  const unassigned: string[] = [];
+  const sheetLabels: string[] = [];
+
+  for (const sheet of sheets) {
+    const columns = headerColumns(sheet);
+    const roles = detectRoles(columns);
+    const category = normalizeCategory(sheet.name) ?? sheet.name.trim();
+    sheetLabels.push(`${sheet.name} → ${normalizeCategory(sheet.name) ?? 'categoria não reconhecida'}`);
+
+    sheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+      if (rowNumber === 1) return;
+      const cellAt = (column: string | null): string => {
+        if (!column) return '';
+        const index = columns.indexOf(column);
+        return index === -1 ? '' : cellToString(row.getCell(index + 1).value);
+      };
+
+      const vetName = cellAt(roles.veterinarian);
+      const clinicName = cellAt(roles.clinic);
+      if (!vetName && !clinicName) return; // linha em branco
+
+      if (!clinicName) {
+        unassigned.push(`${sheet.name}, linha ${rowNumber}${vetName ? `: ${vetName}` : ''}`);
+        return;
+      }
+
+      const neighborhood = cellAt(roles.neighborhood);
+      const key = `${normalizeKey(clinicName)}|${normalizeKey(neighborhood)}`;
+      const group = groups.get(key) ?? {
+        name: clinicName,
+        neighborhood,
+        veterinarians: 0,
+        split: false,
+        byCategory: new Map<string, number>(),
+        pendingRows: 0,
+      };
+      // Garante que a clinica tenha uma categoria mesmo se esta linha nao
+      // tiver veterinario nomeado (senao uma clinica so-pendente nao teria
+      // categoria nenhuma para desempatar).
+      if (!group.byCategory.has(category)) group.byCategory.set(category, 0);
+
+      if (vetName) {
+        group.veterinarians += 1;
+        group.byCategory.set(category, (group.byCategory.get(category) ?? 0) + 1);
+        if (isTruthyFlag(cellAt(roles.split))) group.split = true;
+      } else {
+        group.pendingRows += 1;
+      }
+      groups.set(key, group);
+    });
+  }
+
+  const conflicts: string[] = [];
+  const pendingClinics: string[] = [];
+  const rows: Array<Record<string, string>> = [];
+  let totalNamedVets = 0;
+
+  for (const group of groups.values()) {
+    // So entram no desempate categorias com veterinario de verdade — uma
+    // linha "so clinica" registrada em CAT3 com peso 0 nao e um "conflito"
+    // com a CAT1 onde essa clinica de fato tem gente, e nao deve aparecer
+    // como se fosse.
+    const named = [...group.byCategory.entries()].filter(([, count]) => count > 0);
+    const ranked = (named.length > 0 ? named : [...group.byCategory.entries()]).sort((a, b) => b[1] - a[1]);
+    const [winningCategory] = ranked[0];
+
+    if (named.length > 1) {
+      const detail = named
+        .sort((a, b) => b[1] - a[1])
+        .map(([cat, count]) => `${cat} (${count})`)
+        .join(' e ');
+      conflicts.push(`${group.name}${group.neighborhood ? ` (${group.neighborhood})` : ''}: ${detail} — mantida ${winningCategory}.`);
+    }
+
+    // Clinica so com linhas "sem veterinario nomeado ainda": entra na
+    // carteira com 1 visita padrao (o motor sempre conta pelo menos 1 por
+    // clinica) em vez de sumir, mas o usuario precisa saber que o numero e
+    // um palpite, nao um dado real.
+    const veterinarians = group.veterinarians > 0 ? group.veterinarians : 1;
+    if (group.veterinarians === 0) {
+      pendingClinics.push(`${group.name}${group.neighborhood ? ` (${group.neighborhood})` : ''}`);
+    }
+    totalNamedVets += group.veterinarians;
+
+    rows.push({
+      'Nome da clínica': group.name,
+      Categoria: winningCategory,
+      Bairro: group.neighborhood,
+      'Quantidade de veterinários': String(veterinarians),
+      'Dividir visita em quantas partes': group.split ? '2' : '',
+    });
+  }
+
+  const notices: string[] = [
+    `${sheets.length === 1 ? 'A aba foi lida' : `${sheets.length} abas foram lidas`} como categoria${sheets.length === 1 ? '' : 's'} (${sheetLabels.join(', ')}); cada linha era um veterinário, agrupamos por clínica.`,
+    `${rows.length} clínicas identificadas a partir de ${totalNamedVets} linhas de veterinário nomeado.`,
+  ];
+  if (conflicts.length > 0) {
+    notices.push(
+      `${conflicts.length} clínica(s) apareceram em mais de uma categoria — mantivemos a categoria com mais veterinários e somamos todos na contagem: ${conflicts.join(' ')}`,
+    );
+  }
+  if (pendingClinics.length > 0) {
+    notices.push(
+      `${pendingClinics.length} clínica(s) aparecem na planilha sem nenhum veterinário nomeado ainda (provável área nova, ainda sendo mapeada) — entraram na carteira com 1 visita, ajuste na Carteira assim que souber o número real: ${pendingClinics.slice(0, 10).join('; ')}${pendingClinics.length > 10 ? '…' : ''}.`,
+    );
+  }
+  if (unassigned.length > 0) {
+    notices.push(
+      `${unassigned.length} veterinário(s) sem clínica preenchida foram ignorados (adicione a clínica na planilha e reimporte para incluí-los): ${unassigned.slice(0, 10).join('; ')}${unassigned.length > 10 ? '…' : ''}.`,
+    );
+  }
+
+  return {
+    columns: ['Nome da clínica', 'Categoria', 'Bairro', 'Quantidade de veterinários', 'Dividir visita em quantas partes'],
+    rows,
+    notices,
+  };
 }
 
 function cellToString(value: ExcelJS.CellValue): string {

@@ -58,6 +58,7 @@ export async function POST(request: Request) {
       filename: file.name,
       columns: sheet.columns,
       mapping,
+      notices: sheet.notices,
       totalRows: sheet.rows.length,
       preview: sheet.rows.slice(0, 8),
     };
