@@ -28,7 +28,7 @@ interface Props {
   forecast: Array<{ year: number; month: number; categories: string[] }>;
   clinicsByCategory: Record<string, number>;
   categoryTargets: Record<string, number>;
-  locatedCount: number;
+  availableVisits: number;
   feasibility: FeasibilityReport;
   existingPlan: {
     id: string;
@@ -296,7 +296,7 @@ export function PlanningWorkspace(props: Props) {
 
               <dl className="space-y-1.5 rounded-lg bg-ink-50 px-3 py-2.5 text-[11px]">
                 <Row label="Carteira ativa" value={`${totalClinics} clínicas`} />
-                <Row label="Com localização" value={`${props.locatedCount}`} />
+                <Row label="Visitas disponíveis" value={`${props.availableVisits}`} />
                 <Row label="Dias disponíveis" value={`${availableDays}`} />
                 <Row label="Capacidade máxima" value={`${capacity} visitas`} />
               </dl>

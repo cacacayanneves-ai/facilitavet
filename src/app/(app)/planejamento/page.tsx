@@ -114,7 +114,7 @@ export default async function PlanningPage({
           availableDays={availableDays}
           forecast={forecast}
           clinicsByCategory={byCategory}
-          locatedCount={activeClinics.reduce((sum, c) => sum + c.veterinarians, 0)}
+          availableVisits={activeClinics.reduce((sum, c) => sum + c.veterinarians, 0)}
           categoryTargets={{
             CAT1: rules.rules.CAT1.targetCount,
             CAT2: rules.rules.CAT2.targetCount,
