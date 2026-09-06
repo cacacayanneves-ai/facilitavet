@@ -10,14 +10,14 @@ interface GoogleOptions {
 }
 
 /**
- * Google Maps Platform — Geocoding API + Routes API (computeRouteMatrix).
+ * Google Maps Platform — Geocoding API + Places API + Routes API (computeRouteMatrix).
  *
  * A chave NUNCA sai do servidor. Todas as chamadas partem daqui, em codigo
  * Node, e o browser so recebe o resultado ja processado.
  *
  * Controle de custo:
  * - `X-Goog-FieldMask` pede apenas os campos usados, o que reduz a cobranca
- *   para o tier basico da Routes API;
+ *   para o tier basico da Routes API e da Places API;
  * - a matriz e sempre pedida por DIA (9x9), nunca para a carteira inteira;
  * - o cache em banco (TravelCache/GeocodeCache) evita repetir a mesma pergunta.
  */
@@ -35,7 +35,21 @@ export class GoogleMapsProvider implements MapsProvider {
     this.timeoutMs = options.timeoutMs ?? 12_000;
   }
 
+  /**
+   * Geocoding e busca de estabelecimento sao perguntas diferentes ao Google:
+   * a Geocoding API interpreta ENDERECO (rua, numero), a Places API acha um
+   * NEGOCIO pelo nome. Uma carteira comercial real com frequencia so tem
+   * nome + bairro — "CINCO ESTRELAS, Campo Grande" na Geocoding API tende a
+   * devolver so o centro do bairro (nenhuma rua pra interpretar), enquanto a
+   * Places API acha a clinica de verdade. Por isso a escolha aqui: com
+   * endereco, geocodifica; sem endereco mas com nome, busca o local.
+   */
   async geocode(query: GeocodeQuery): Promise<GeocodeResult> {
+    if (!query.address && query.name) return this.searchPlace(query);
+    return this.geocodeAddress(query);
+  }
+
+  private async geocodeAddress(query: GeocodeQuery): Promise<GeocodeResult> {
     const address = buildGeocodeString(query);
     const url = new URL('https://maps.googleapis.com/maps/api/geocode/json');
     url.searchParams.set('address', address);
@@ -69,6 +83,53 @@ export class GoogleMapsProvider implements MapsProvider {
     // Nao escolhemos silenciosamente o primeiro.
     const precise = candidates.filter((c) => c.precision === 'ROOFTOP' || c.precision === 'RANGE_INTERPOLATED');
     const status = candidates.length > 1 && precise.length !== 1 ? 'AMBIGUOUS' : 'RESOLVED';
+
+    return { status, candidates, provider: this.name };
+  }
+
+  /** Places API (New) Text Search — acha o estabelecimento pelo nome. */
+  private async searchPlace(query: GeocodeQuery): Promise<GeocodeResult> {
+    const textQuery = buildGeocodeString(query);
+
+    const response = await this.fetchJson<GooglePlacesSearchResponse>(
+      'https://places.googleapis.com/v1/places:searchText',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': this.apiKey,
+          // So os 4 campos usados — cada campo a mais sobe o tier de preco
+          // da Places API (secao 77).
+          'X-Goog-FieldMask': 'places.id,places.formattedAddress,places.location,places.displayName',
+        },
+        body: JSON.stringify({ textQuery, languageCode: 'pt-BR', regionCode: 'BR' }),
+      },
+    );
+
+    const places = response.places ?? [];
+    if (places.length === 0) {
+      return {
+        status: 'FAILED',
+        candidates: [],
+        provider: this.name,
+        reason: `Nenhum estabelecimento encontrado para "${textQuery}".`,
+      };
+    }
+
+    const candidates: GeocodeCandidate[] = places.slice(0, 5).map((p) => ({
+      lat: p.location.latitude,
+      lng: p.location.longitude,
+      label: p.formattedAddress ?? p.displayName?.text ?? textQuery,
+      // A Places API nao classifica precisao como a Geocoding API; um
+      // estabelecimento encontrado pelo nome e, na pratica, tao confiavel
+      // quanto um endereco exato (ROOFTOP), entao reaproveitamos o rotulo.
+      precision: 'ROOFTOP',
+      placeId: p.id,
+    }));
+
+    // Mesma regra da geocodificacao por endereco: mais de um estabelecimento
+    // plausivel vira ambiguidade para o usuario escolher, nunca um palpite.
+    const status = candidates.length > 1 ? 'AMBIGUOUS' : 'RESOLVED';
 
     return { status, candidates, provider: this.name };
   }
@@ -174,6 +235,15 @@ interface GoogleGeocodeResponse {
     formatted_address: string;
     place_id: string;
     geometry: { location: { lat: number; lng: number }; location_type: string };
+  }>;
+}
+
+interface GooglePlacesSearchResponse {
+  places?: Array<{
+    id: string;
+    formattedAddress?: string;
+    location: { latitude: number; longitude: number };
+    displayName?: { text: string; languageCode: string };
   }>;
 }
 
