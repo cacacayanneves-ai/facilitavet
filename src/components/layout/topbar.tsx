@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import * as React from 'react';
 import { LogOut, Sparkles } from 'lucide-react';
 import { Logo } from '@/components/brand/logo';
+import { ThemeToggle } from '@/components/theme/theme-toggle';
 import { Button } from '@/components/ui';
 import { cn } from '@/lib/utils';
 
@@ -56,6 +57,9 @@ export function Topbar({
             </span>
           )}
           {actions}
+          {/* No desktop o seletor ja mora na Sidebar; aqui ele so aparece onde
+              ela some — a barra lateral e `hidden` abaixo do breakpoint `lg`. */}
+          <ThemeToggle className="lg:hidden" />
           <Button variant="ghost" size="icon" onClick={logout} loading={loggingOut} title="Sair">
             {!loggingOut && <LogOut className="size-4" strokeWidth={1.75} />}
           </Button>

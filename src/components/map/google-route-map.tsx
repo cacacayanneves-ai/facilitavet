@@ -15,12 +15,19 @@ import { RouteMap } from './route-map';
  *
  * Sem chave, ou se o script falhar ao carregar, cai para o mapa vetorial —
  * o produto nunca fica sem mapa.
+ *
+ * Os tiles do Google sao imagem renderizada pelo proprio Google, fora do
+ * alcance do CSS: sem um `styles` escuro dedicado, o mapa ficaria um
+ * retangulo branco cravado no meio de uma interface escura. `useIsDarkTheme`
+ * observa tanto a escolha explicita (`data-theme`) quanto a preferencia do
+ * sistema, para o mapa acompanhar o resto da tela nos dois casos.
  */
 export function GoogleRouteMap(props: RouteMapProps & { apiKey: string }) {
   const { apiKey, ...mapProps } = props;
   const containerRef = React.useRef<HTMLDivElement>(null);
   const [status, setStatus] = React.useState<'loading' | 'ready' | 'failed'>('loading');
   const mapRef = React.useRef<unknown>(null);
+  const isDark = useIsDarkTheme();
 
   React.useEffect(() => {
     if (!apiKey) {
@@ -51,6 +58,8 @@ export function GoogleRouteMap(props: RouteMapProps & { apiKey: string }) {
       return;
     }
 
+    const palette = isDark ? DARK_PALETTE : LIGHT_PALETTE;
+
     const bounds = new google.maps.LatLngBounds();
     const points = [
       ...(props.origin ? [props.origin] : []),
@@ -66,7 +75,7 @@ export function GoogleRouteMap(props: RouteMapProps & { apiKey: string }) {
       fullscreenControl: false,
       clickableIcons: false,
       // Estilo enxuto: o dado do produto e a rota, nao pontos de interesse.
-      styles: MAP_STYLE,
+      styles: isDark ? MAP_STYLE_DARK : MAP_STYLE_LIGHT,
     });
     map.fitBounds(bounds, 56);
     mapRef.current = map;
@@ -75,7 +84,7 @@ export function GoogleRouteMap(props: RouteMapProps & { apiKey: string }) {
     new google.maps.Polyline({
       path,
       map,
-      strokeColor: '#1f6b5e',
+      strokeColor: palette.route,
       strokeOpacity: 0.9,
       strokeWeight: 3,
     });
@@ -85,7 +94,7 @@ export function GoogleRouteMap(props: RouteMapProps & { apiKey: string }) {
         position: { lat: stop.lat, lng: stop.lng },
         map,
         label: stop.sequence
-          ? { text: String(stop.sequence), color: '#fff', fontSize: '11px', fontWeight: '600' }
+          ? { text: String(stop.sequence), color: palette.markerLabel, fontSize: '11px', fontWeight: '600' }
           : undefined,
         title: stop.label,
       });
@@ -99,14 +108,14 @@ export function GoogleRouteMap(props: RouteMapProps & { apiKey: string }) {
         icon: {
           path: google.maps.SymbolPath.CIRCLE,
           scale: 7,
-          fillColor: '#ffffff',
+          fillColor: palette.originFill,
           fillOpacity: 1,
-          strokeColor: '#1f6b5e',
+          strokeColor: palette.route,
           strokeWeight: 3,
         },
       });
     }
-  }, [status, props.stops, props.origin, props.destination]);
+  }, [status, isDark, props.stops, props.origin, props.destination]);
 
   if (status === 'failed') return <RouteMap {...mapProps} />;
 
@@ -119,6 +128,44 @@ export function GoogleRouteMap(props: RouteMapProps & { apiKey: string }) {
       {status === 'loading' && <div className="skeleton absolute inset-0" />}
     </div>
   );
+}
+
+/**
+ * Acompanha o tema efetivo (escolha explicita OU preferencia do sistema).
+ *
+ * Reage tanto a mudanca do atributo `data-theme` (o usuario trocou no
+ * seletor) quanto a mudanca da preferencia do SO (o usuario nao escolheu
+ * nada e o sistema mudou de turno) — as duas formas fazem o mapa reconstruir
+ * seu estilo, ja que `styles` do Google Maps nao e algo que o CSS alcance.
+ */
+function useIsDarkTheme(): boolean {
+  const [isDark, setIsDark] = React.useState(false);
+
+  React.useEffect(() => {
+    const root = document.documentElement;
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+
+    function compute() {
+      const explicit = root.getAttribute('data-theme');
+      if (explicit === 'dark') return true;
+      if (explicit === 'light') return false;
+      return media.matches;
+    }
+
+    setIsDark(compute());
+
+    const onChange = () => setIsDark(compute());
+    const observer = new MutationObserver(onChange);
+    observer.observe(root, { attributes: true, attributeFilter: ['data-theme'] });
+    media.addEventListener('change', onChange);
+
+    return () => {
+      observer.disconnect();
+      media.removeEventListener('change', onChange);
+    };
+  }, []);
+
+  return isDark;
 }
 
 let loaderPromise: Promise<void> | null = null;
@@ -144,10 +191,37 @@ function loadGoogleMaps(apiKey: string): Promise<void> {
   return loaderPromise;
 }
 
-const MAP_STYLE = [
+/** Cores da rota/marcadores — espelham os tokens de marca de cada tema. */
+const LIGHT_PALETTE = { route: '#1f6b5e', markerLabel: '#fff', originFill: '#ffffff' };
+const DARK_PALETTE = { route: '#5fcfae', markerLabel: '#0b241f', originFill: '#1c342f' };
+
+const MAP_STYLE_LIGHT = [
   { featureType: 'poi', stylers: [{ visibility: 'off' }] },
   { featureType: 'transit', stylers: [{ visibility: 'off' }] },
   { featureType: 'road', elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
+];
+
+/**
+ * Estilo noturno.
+ *
+ * Nao e so "inverter as cores": segue a paleta de referencia da propria
+ * Google para tema escuro (fundo quase-preto, agua azul-petroleo, vias em
+ * cinza-medio), com o verde da marca entrando so nos elementos que ja eram
+ * nossos (rota e marcador de origem, tratados a parte).
+ */
+const MAP_STYLE_DARK = [
+  { featureType: 'poi', stylers: [{ visibility: 'off' }] },
+  { featureType: 'transit', stylers: [{ visibility: 'off' }] },
+  { featureType: 'road', elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
+  { elementType: 'geometry', stylers: [{ color: '#17211e' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#17211e' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#8fa6a0' }] },
+  { featureType: 'administrative', elementType: 'geometry', stylers: [{ color: '#2c3835' }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#2c3835' }] },
+  { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#212b28' }] },
+  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#3a4b46' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0e1a1f' }] },
+  { featureType: 'landscape', elementType: 'geometry', stylers: [{ color: '#17211e' }] },
 ];
 
 /* Tipagem minima do que realmente usamos da API do Google Maps. */
