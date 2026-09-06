@@ -374,10 +374,17 @@ O `vercel.json` já registra os jobs:
 | Rota | Agenda (UTC) | Função |
 |---|---|---|
 | `/api/cron/prepare-daily-routes` | `55 10 * * 1-5` | 07:55 em Brasília — monta e enfileira o roteiro do dia |
-| `/api/cron/dispatch-messages` | `*/5 * * * *` | Envia o que estiver vencido no outbox |
+| `/api/cron/dispatch-messages` | `5 11 * * 1-5` | Envia o que estiver vencido no outbox |
 
 > As agendas do cron são em **UTC**. `55 10` corresponde a 07:55 em UTC−3.
 > Ajuste se seu fuso for outro.
+>
+> O plano gratuito (Hobby) da Vercel só executa cron jobs **no máximo 1x/dia**,
+> por isso `dispatch-messages` roda uma vez, logo depois do `prepare-daily-routes`,
+> em vez de a cada poucos minutos. Se precisar de despacho mais frequente
+> (ex.: reenvio de mensagens que falharam durante o dia), use um agendador
+> externo (cron-job.org, GitHub Actions) chamando essa rota com o header
+> `Authorization: Bearer $CRON_SECRET`, ou faça upgrade para o plano Pro da Vercel.
 
 ### Outras plataformas
 
