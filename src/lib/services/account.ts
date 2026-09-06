@@ -1,23 +1,44 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { hashPassword } from '@/lib/auth';
 import { DEFAULT_CATEGORY_RULES, DEFAULT_SCORE_WEIGHTS } from '@/lib/route-planner';
-import { brazilianHolidays, saoPauloHolidays } from '@/lib/services/holidays';
+import { brazilianHolidays, rioDeJaneiroHolidays, saoPauloHolidays, type HolidayEntry } from '@/lib/services/holidays';
 
 type Db = PrismaClient | Prisma.TransactionClient;
+
+/**
+ * Calendarios estaduais/municipais conhecidos, por UF.
+ *
+ * So os feriados NACIONAIS sao universais — o resto depende de onde a conta
+ * opera. `state` deve acompanhar o default de `UserSettings.state` no schema:
+ * uma conta nova sem essa info ainda cai no mesmo estado do restante do
+ * onboarding.
+ */
+const REGIONAL_HOLIDAYS: Record<string, (year: number) => HolidayEntry[]> = {
+  SP: saoPauloHolidays,
+  RJ: rioDeJaneiroHolidays,
+};
 
 /**
  * Feriados do ano corrente e do proximo.
  *
  * Ficam sem organizationId de proposito: sao datas do calendario civil, iguais
- * para todo mundo. O indice unico (data + pais + estado + cidade + nome) faz o
- * upsert ser idempotente, entao chamar isso a cada cadastro nao duplica nada.
+ * para todo mundo com aquele estado. O indice unico (data + pais + estado +
+ * cidade + nome) faz o upsert ser idempotente, entao chamar isso a cada
+ * cadastro nao duplica nada — inclusive ao somar o calendario de um segundo
+ * estado por cima do primeiro, com contas em regioes diferentes.
  */
-export async function ensureHolidays(db: Db, year = new Date().getUTCFullYear()) {
+export async function ensureHolidays(
+  db: Db,
+  options: { state?: string | null; year?: number } = {},
+) {
+  const year = options.year ?? new Date().getUTCFullYear();
+  const regional = options.state ? REGIONAL_HOLIDAYS[options.state.toUpperCase()] : undefined;
+
   const entries = [
     ...brazilianHolidays(year),
     ...brazilianHolidays(year + 1),
-    ...saoPauloHolidays(year),
-    ...saoPauloHolidays(year + 1),
+    ...(regional ? regional(year) : []),
+    ...(regional ? regional(year + 1) : []),
   ];
 
   for (const holiday of entries) {
@@ -123,7 +144,9 @@ export async function createAccount(
 
   // Fora da transacao: o cadastro nao pode falhar por causa do calendario,
   // que e complementar e reaproveitado por todas as organizacoes.
-  await ensureHolidays(db).catch(() => undefined);
+  // 'RJ' aqui espelha o default de UserSettings.state no schema — se um dia
+  // o cadastro passar a perguntar a regiao, e so passar o valor real aqui.
+  await ensureHolidays(db, { state: 'RJ' }).catch(() => undefined);
 
   return user;
 }

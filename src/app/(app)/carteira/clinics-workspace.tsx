@@ -344,8 +344,8 @@ function NewClinicDialog({
     category: 'CAT1',
     address: '',
     neighborhood: '',
-    city: 'São Paulo',
-    state: 'SP',
+    city: 'Rio de Janeiro',
+    state: 'RJ',
     phone: '',
     veterinarians: 1,
   });

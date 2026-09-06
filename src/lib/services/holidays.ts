@@ -80,10 +80,18 @@ export function brazilianHolidays(year: number): HolidayEntry[] {
   return entries.sort((a, b) => a.date.localeCompare(b.date));
 }
 
-/** Feriados estaduais/municipais de Sao Paulo usados pela demo. */
+/** Feriados estaduais/municipais de Sao Paulo. */
 export function saoPauloHolidays(year: number): HolidayEntry[] {
   return [
     { date: key(new Date(Date.UTC(year, 0, 25))), name: 'Aniversário de São Paulo', country: 'BR', state: 'SP', city: 'Sao Paulo' },
     { date: key(new Date(Date.UTC(year, 6, 9))), name: 'Revolução Constitucionalista', country: 'BR', state: 'SP', city: '' },
+  ];
+}
+
+/** Feriados estaduais/municipais do Rio de Janeiro. */
+export function rioDeJaneiroHolidays(year: number): HolidayEntry[] {
+  return [
+    { date: key(new Date(Date.UTC(year, 0, 20))), name: 'São Sebastião', country: 'BR', state: 'RJ', city: 'Rio de Janeiro' },
+    { date: key(new Date(Date.UTC(year, 3, 23))), name: 'São Jorge', country: 'BR', state: 'RJ', city: '' },
   ];
 }

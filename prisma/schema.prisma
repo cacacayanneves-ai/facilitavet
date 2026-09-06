@@ -175,8 +175,8 @@ model UserSettings {
 
   // Regiao para feriados
   country String  @default("BR")
-  state   String? @default("SP")
-  city    String? @default("Sao Paulo")
+  state   String? @default("RJ")
+  city    String? @default("Rio de Janeiro")
 
   // Notificacoes
   whatsappEnabled         Boolean @default(true)
