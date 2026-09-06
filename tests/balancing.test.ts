@@ -86,10 +86,10 @@ describe('viabilidade', () => {
     expect(report.message).toContain('Nenhum dia disponível');
   });
 
-  it('recusa quando uma clinica sozinha tem mais veterinarios que o limite diario', () => {
-    // Uma clinica e atomica: nao da para atender 6 dos 9 veterinarios hoje e
-    // 3 amanha. Se o limite diario e 8 e uma clinica tem 9 veterinarios,
-    // nenhum dia do mes consegue recebe-la — mais dias nao resolve isso.
+  it('aceita clinica maior que o limite diario e avisa que ela toma o dia', () => {
+    // Numa clinica publica todos os veterinarios estao juntos: a visita e uma
+    // so e vale por todos. O limite diario rege o que se acrescenta ao dia,
+    // entao uma parada de 9 com teto 8 nao inviabiliza nada, so ocupa o dia.
     const report = evaluateFeasibility({
       requiredVisits: 50,
       requiredStops: 10,
@@ -101,14 +101,47 @@ describe('viabilidade', () => {
         { id: '2', name: 'Clínica Beta', category: 'CAT1', veterinarians: 3, lat: 0, lng: 0 },
       ],
     });
-    expect(report.feasible).toBe(false);
-    expect(report.oversizedClinics).toHaveLength(1);
-    expect(report.oversizedClinics[0].name).toBe('Clínica Alfa');
+    expect(report.feasible).toBe(true);
+    expect(report.fullDayClinics).toHaveLength(1);
+    expect(report.fullDayClinics[0].name).toBe('Clínica Alfa');
     expect(report.message).toContain('Clínica Alfa');
-    expect(report.message).toContain('9');
+    expect(report.message).toContain('dia inteiro');
   });
 
-  it('nao acusa clinica sobredimensionada quando ela cabe no limite', () => {
+  it('conta a clinica de dia inteiro na capacidade pelo proprio tamanho', () => {
+    // 3 dias, teto 8. Sem a clinica grande a capacidade seria 24; com ela,
+    // sao 2 dias normais (16) + os 20 dela = 36.
+    const report = evaluateFeasibility({
+      requiredVisits: 36,
+      requiredStops: 6,
+      availableDays: 3,
+      minPerDay: 4,
+      maxPerDay: 8,
+      clinics: [{ id: '1', name: 'Fazenda Modelo', category: 'CAT1', veterinarians: 20, lat: 0, lng: 0 }],
+    });
+    expect(report.capacity).toBe(36);
+    expect(report.deficit).toBe(0);
+    expect(report.feasible).toBe(true);
+  });
+
+  it('recusa quando ha mais clinicas de dia inteiro que dias disponiveis', () => {
+    const report = evaluateFeasibility({
+      requiredVisits: 60,
+      requiredStops: 3,
+      availableDays: 2,
+      minPerDay: 4,
+      maxPerDay: 8,
+      clinics: [
+        { id: '1', name: 'Alfa', category: 'CAT1', veterinarians: 20, lat: 0, lng: 0 },
+        { id: '2', name: 'Beta', category: 'CAT1', veterinarians: 20, lat: 0, lng: 0 },
+        { id: '3', name: 'Gama', category: 'CAT1', veterinarians: 20, lat: 0, lng: 0 },
+      ],
+    });
+    expect(report.feasible).toBe(false);
+    expect(report.message).toContain('ocupam');
+  });
+
+  it('nao marca como dia inteiro a clinica que cabe no limite', () => {
     const report = evaluateFeasibility({
       requiredVisits: 20,
       requiredStops: 5,
@@ -117,6 +150,6 @@ describe('viabilidade', () => {
       maxPerDay: 14,
       clinics: [{ id: '1', name: 'Clínica Alfa', category: 'CAT1', veterinarians: 8, lat: 0, lng: 0 }],
     });
-    expect(report.oversizedClinics).toHaveLength(0);
+    expect(report.fullDayClinics).toHaveLength(0);
   });
 });

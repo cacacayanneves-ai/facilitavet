@@ -223,14 +223,17 @@ describe('motor de planejamento — casos de contorno', () => {
     expect(result.feasibility.message).toContain('Não é possível');
   });
 
-  it('recusa quando uma clinica sozinha tem mais veterinarios que o limite diario', async () => {
+  it('planeja o mes com clinica maior que o limite diario, avisando que ela toma o dia', async () => {
+    // Clinica publica: os 30 veterinarios estao juntos, entao a parada e uma
+    // so e vale 30. Isso nao inviabiliza o mes, apenas ocupa um dia inteiro.
     const clinics = buildClinics();
     clinics[0] = { ...clinics[0], veterinarians: 30 };
     const input = baseInput({ clinics, preferences: { ...DEFAULT_PREFERENCES, maxVisitsPerDay: 14 } });
     const result = await generatePlan(input);
-    expect(result.feasibility.feasible).toBe(false);
-    expect(result.feasibility.oversizedClinics.some((c) => c.id === clinics[0].id)).toBe(true);
+    expect(result.feasibility.feasible).toBe(true);
+    expect(result.feasibility.fullDayClinics.some((c) => c.id === clinics[0].id)).toBe(true);
     expect(result.feasibility.message).toContain(clinics[0].name);
+    expect(result.routes.length).toBeGreaterThan(0);
   });
 
   it('ignora clinicas sem coordenadas mas avisa em vez de silenciar', async () => {

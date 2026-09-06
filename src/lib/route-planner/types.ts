@@ -250,10 +250,10 @@ export interface FeasibilityReport {
   /** Paradas (clinicas) correspondentes. */
   requiredStops: number;
   /**
-   * Clinicas cujo numero de veterinarios sozinho ja estoura o limite diario.
-   * Uma clinica e atomica: nao da para dividir seus veterinarios entre dias.
+   * Clinicas cujo numero de veterinarios sozinho passa do limite diario.
+   * Nao sao um impedimento: a parada e indivisivel e ocupa o dia inteiro.
    */
-  oversizedClinics: Array<{ id: string; name: string; veterinarians: number }>;
+  fullDayClinics: Array<{ id: string; name: string; veterinarians: number }>;
   availableDays: number;
   capacity: number;
   minimumCapacity: number;
