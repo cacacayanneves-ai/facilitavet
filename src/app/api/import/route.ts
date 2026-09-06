@@ -48,6 +48,7 @@ export async function POST(request: Request) {
         status: 'MAPPED',
         detectedColumns: sheet.columns,
         columnMapping: mapping,
+        rawRows: sheet.rows as unknown as object,
         rows: sheet.rows as unknown as object,
         totalRows: sheet.rows.length,
       },
@@ -85,7 +86,13 @@ export async function PUT(request: Request) {
     });
     if (!batch) throw new Error('Lote de importação não encontrado.');
 
-    const rows = batch.rows as unknown as Array<Record<string, string>>;
+    // Sempre a partir do bruto, nunca de `rows` (que uma validacao anterior ja
+    // pode ter reescrito no formato normalizado) — assim clicar em "Validar e
+    // localizar" de novo (ex: apos corrigir a chave do Google Maps) reavalia
+    // a planilha original em vez de reinterpretar colunas que nao existem mais.
+    // Lotes criados antes deste campo existir nao tem `rawRows` — caem de
+    // volta em `rows` (comportamento antigo, so afeta lotes ja abandonados).
+    const rows = (batch.rawRows ?? batch.rows) as unknown as Array<Record<string, string>>;
     const settings = await prisma.userSettings.findUnique({ where: { userId: user.id } });
 
     let normalized = await validateRows({

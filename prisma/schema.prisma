@@ -498,7 +498,12 @@ model ImportBatch {
 
   detectedColumns Json
   columnMapping   Json?
-  rows            Json // linhas normalizadas + diagnostico por linha
+  // Copia imutavel do que foi lido da planilha (chaves = nome de coluna) —
+  // preservada para que "Validar e localizar" possa ser clicado de novo (ex:
+  // depois de corrigir a chave do Google Maps) sem depender do resultado da
+  // validacao anterior, que fica em `rows` num formato diferente.
+  rawRows Json?
+  rows    Json // linhas normalizadas + diagnostico por linha, apos a 1a validacao
 
   totalRows     Int @default(0)
   validRows     Int @default(0)
