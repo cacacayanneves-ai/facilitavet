@@ -145,3 +145,29 @@ describe('Places API: multiplos resultados exigem decisao humana', () => {
     expect(result.candidates.length).toBeLessThanOrEqual(5);
   });
 });
+
+describe('erro HTTP da Places/Routes API', () => {
+  it('propaga o motivo do Google, nao so o codigo HTTP (essencial para diagnosticar 403 de chave/restricao)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse(
+          { error: { code: 403, message: 'This API key is not authorized to use this service or API.', status: 'PERMISSION_DENIED' } },
+          403,
+        ),
+      ),
+    );
+    const provider = new GoogleMapsProvider({ apiKey: 'k', elementBudget: 4000 });
+    await expect(provider.geocode({ name: 'Clínica X', neighborhood: 'Bangu' })).rejects.toThrow(
+      'Google Maps HTTP 403: This API key is not authorized to use this service or API. (PERMISSION_DENIED)',
+    );
+  });
+
+  it('sem corpo JSON reconhecivel, cai para o texto cru da resposta', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('Forbidden', { status: 403 })));
+    const provider = new GoogleMapsProvider({ apiKey: 'k', elementBudget: 4000 });
+    await expect(provider.geocode({ name: 'Clínica X', neighborhood: 'Bangu' })).rejects.toThrow(
+      'Google Maps HTTP 403: Forbidden',
+    );
+  });
+});

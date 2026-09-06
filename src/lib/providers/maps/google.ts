@@ -202,13 +202,32 @@ export class GoogleMapsProvider implements MapsProvider {
           status: response.status,
           body: text.slice(0, 500),
         });
-        throw new Error(`Google Maps HTTP ${response.status}`);
+        throw new Error(`Google Maps HTTP ${response.status}: ${extractGoogleErrorReason(text)}`);
       }
       return (await response.json()) as T;
     } finally {
       clearTimeout(timeout);
     }
   }
+}
+
+/**
+ * Places API e Routes API devolvem o motivo do erro em JSON (`error.message`),
+ * nao so o codigo HTTP — sem isso, "HTTP 403" sozinho nao diz se e chave sem
+ * permissao para aquela API, API nao habilitada ou restricao de referrer,
+ * obrigando a olhar o log do servidor a cada falha em vez da propria tela de
+ * revisao da importacao.
+ */
+function extractGoogleErrorReason(rawBody: string): string {
+  try {
+    const parsed = JSON.parse(rawBody) as { error?: { message?: string; status?: string } };
+    if (parsed.error?.message) {
+      return parsed.error.status ? `${parsed.error.message} (${parsed.error.status})` : parsed.error.message;
+    }
+  } catch {
+    // Corpo nao e JSON (raro nas APIs do Google) — cai no texto cru abaixo.
+  }
+  return rawBody.trim().slice(0, 300) || 'sem detalhes na resposta.';
 }
 
 function toWaypoint(point: LatLng) {
