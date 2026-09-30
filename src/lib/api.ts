@@ -44,7 +44,12 @@ export async function handle<T>(
 /** Autorizacao dos jobs agendados (secao 62). */
 export function assertCronAuthorized(request: Request): void {
   const secret = process.env.CRON_SECRET;
-  if (!secret) return; // sem segredo configurado, so roda em dev
+  if (!secret) {
+    // Sem segredo so e aceitavel em dev; em producao seria rota aberta para
+    // qualquer um disparar envio de WhatsApp.
+    if (process.env.NODE_ENV === 'production') throw new UnauthorizedError();
+    return;
+  }
   const header = request.headers.get('authorization') ?? '';
   if (header !== `Bearer ${secret}`) {
     throw new UnauthorizedError();

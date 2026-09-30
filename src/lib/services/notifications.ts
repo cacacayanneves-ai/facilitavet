@@ -2,7 +2,8 @@ import { prisma } from '@/lib/db';
 import { logger, newExecutionId } from '@/lib/logger';
 import { getWhatsAppProvider, normalizePhone } from '@/lib/providers/whatsapp';
 import { env } from '@/lib/env';
-import { isWorkingDay, toDateKey } from './calendar';
+import { isWorkingDay } from './calendar';
+import { todayKey, zonedDateTimeToUtc } from '@/lib/utils';
 import {
   buildFullRouteUrl,
   buildRouteMessage,
@@ -37,7 +38,7 @@ export interface PrepareResult {
 export async function prepareDailyMessages(options: { date?: string } = {}): Promise<PrepareResult> {
   const executionId = newExecutionId('notify');
   const log = logger.child({ executionId, scope: 'notifications.prepare' });
-  const dateKey = options.date ?? toDateKey(new Date());
+  const dateKey = options.date ?? todayKey();
 
   const users = await prisma.user.findMany({
     include: { settings: true },
@@ -140,7 +141,10 @@ export async function prepareDailyMessages(options: { date?: string } = {}): Pro
       },
     });
 
-    const scheduledFor = new Date(`${dateKey}T${settings.whatsappTime}:00.000Z`);
+    // O horario configurado e de relogio de Brasilia; o dispatch compara com
+    // o instante real, entao a conversao e obrigatoria (senao "09:00" viraria
+    // 06:00 de Brasilia).
+    const scheduledFor = zonedDateTimeToUtc(dateKey, settings.whatsappTime);
     const dedupeKey = `daily-route:${user.id}:${dateKey}`;
 
     // Upsert: preparar de novo antes do envio ATUALIZA o texto (secao 43),
@@ -188,6 +192,16 @@ export async function dispatchDueMessages(options: { limit?: number } = {}): Pro
   const log = logger.child({ executionId, scope: 'notifications.dispatch' });
   const provider = getWhatsAppProvider();
   const config = env();
+
+  // Roteiro de um dia que ja passou nao serve mais: se a mensagem nao saiu no
+  // dia dela (ex: horario depois da unica rodada diaria do cron), descarta em
+  // vez de mandar a rota de ontem junto com a de hoje.
+  const startOfToday = zonedDateTimeToUtc(todayKey(), '00:00');
+  const expired = await prisma.outboxMessage.updateMany({
+    where: { status: 'QUEUED', scheduledFor: { lt: startOfToday } },
+    data: { status: 'SKIPPED', error: 'Expirada: não foi enviada no dia do roteiro.' },
+  });
+  if (expired.count > 0) log.warn('Mensagens expiradas descartadas', { count: expired.count });
 
   const due = await prisma.outboxMessage.findMany({
     where: { status: 'QUEUED', scheduledFor: { lte: new Date() } },

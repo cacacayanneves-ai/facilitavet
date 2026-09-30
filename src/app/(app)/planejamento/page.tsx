@@ -5,6 +5,7 @@ import { parseCategoryRules } from '@/lib/services/settings';
 import { categoryForecast, evaluateFeasibility, expandSplitClinics, type PlannerClinic } from '@/lib/route-planner';
 import { Topbar } from '@/components/layout/topbar';
 import { PlanningWorkspace } from './planning-workspace';
+import { currentYearMonth } from '@/lib/utils';
 
 export const metadata = { title: 'Planejamento' };
 export const dynamic = 'force-dynamic';
@@ -18,9 +19,9 @@ export default async function PlanningPage({
   const settings = user.settings!;
   const params = await searchParams;
 
-  const now = new Date();
-  const year = Number.parseInt(params.year ?? '', 10) || now.getUTCFullYear();
-  const month = Number.parseInt(params.month ?? '', 10) || now.getUTCMonth() + 1;
+  const now = currentYearMonth();
+  const year = Number.parseInt(params.year ?? '', 10) || now.year;
+  const month = Number.parseInt(params.month ?? '', 10) || now.month;
 
   const rules = parseCategoryRules(settings.categoryRules);
 

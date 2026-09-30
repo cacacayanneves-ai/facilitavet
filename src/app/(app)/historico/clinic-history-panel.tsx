@@ -1,7 +1,7 @@
 'use client';
 
 import { Badge, Card, CardContent, CategoryBadge } from '@/components/ui';
-import { cn, formatDate, VISIT_STATUS_LABEL } from '@/lib/utils';
+import { cn, formatDate, todayKey, VISIT_STATUS_LABEL } from '@/lib/utils';
 
 /**
  * Historico da clinica (secao 38): ultima visita, visita anterior, proxima.
@@ -24,7 +24,7 @@ export function ClinicHistoryPanel({
   };
   visits: Array<{ id: string; date: string; status: string; category: string }>;
 }) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayKey();
   const completed = visits.filter((v) => v.status === 'COMPLETED').sort((a, b) => b.date.localeCompare(a.date));
   const upcoming = visits
     .filter((v) => v.status === 'PLANNED' && v.date >= today)

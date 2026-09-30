@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/db';
+import { currentYearMonth, todayKey } from '@/lib/utils';
 import type { CurrentUser } from '@/lib/auth';
-import { buildWorkCalendar, fromDateKey, toDateKey } from './calendar';
+import { buildWorkCalendar, fromDateKey } from './calendar';
 import { getMonthProgress } from './visits';
 import { parseCategoryRules } from './settings';
 import { requiredCategoriesFor } from '@/lib/route-planner';
@@ -14,9 +15,8 @@ import { requiredCategoriesFor } from '@/lib/route-planner';
  */
 export async function getDashboardData(user: CurrentUser, reference = new Date()) {
   const settings = user.settings!;
-  const year = reference.getUTCFullYear();
-  const month = reference.getUTCMonth() + 1;
-  const today = toDateKey(reference);
+  const today = todayKey(reference);
+  const { year, month } = currentYearMonth(reference);
 
   const [calendar, plan, todayRoute, upcomingRoutes, nextRoute, clinicStats] = await Promise.all([
     buildWorkCalendar({

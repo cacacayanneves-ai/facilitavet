@@ -3,13 +3,15 @@ import { prisma } from '@/lib/db';
 import { requireApiUser } from '@/lib/auth';
 import { handle } from '@/lib/api';
 import { buildWorkCalendar, fromDateKey } from '@/lib/services/calendar';
+import { currentYearMonth } from '@/lib/utils';
 
 export async function GET(request: Request) {
   return handle('api.calendar.get', async () => {
     const user = await requireApiUser();
     const params = new URL(request.url).searchParams;
-    const year = Number.parseInt(params.get('year') ?? '', 10) || new Date().getUTCFullYear();
-    const month = Number.parseInt(params.get('month') ?? '', 10) || new Date().getUTCMonth() + 1;
+    const now = currentYearMonth();
+    const year = Number.parseInt(params.get('year') ?? '', 10) || now.year;
+    const month = Number.parseInt(params.get('month') ?? '', 10) || now.month;
 
     const calendar = await buildWorkCalendar({
       userId: user.id,

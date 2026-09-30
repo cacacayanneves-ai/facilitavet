@@ -70,9 +70,48 @@ export function dateKey(value: Date): string {
   return value.toISOString().slice(0, 10);
 }
 
-export function todayKey(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+/**
+ * Fuso do negocio. O servidor (Vercel) roda em UTC, 3h a frente do Brasil:
+ * sem isto, a partir das 21h "hoje" ja vira amanha (e no ultimo dia do mes,
+ * o mes seguinte), e a saudacao erra em 3 horas. Todo "agora" do produto
+ * passa por aqui, no servidor e no navegador.
+ */
+export const BUSINESS_TIME_ZONE = 'America/Sao_Paulo';
+
+const zonedFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: BUSINESS_TIME_ZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+});
+
+function zonedParts(date: Date) {
+  const parts = zonedFormatter.formatToParts(date);
+  const get = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((p) => p.type === type)?.value ?? 0);
+  return { year: get('year'), month: get('month'), day: get('day'), hour: get('hour'), minute: get('minute') };
+}
+
+/** "YYYY-MM-DD" de hoje no fuso do negocio. */
+export function todayKey(now = new Date()): string {
+  const { year, month, day } = zonedParts(now);
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+/** Ano e mes correntes no fuso do negocio (mes de 1 a 12). */
+export function currentYearMonth(now = new Date()): { year: number; month: number } {
+  const { year, month } = zonedParts(now);
+  return { year, month };
+}
+
+/** Converte "YYYY-MM-DD" + "HH:MM" de relogio de Brasilia no instante real. */
+export function zonedDateTimeToUtc(dateKey: string, time: string): Date {
+  const naive = new Date(`${dateKey}T${time}:00.000Z`);
+  const p = zonedParts(naive);
+  const offsetMs = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute) - naive.getTime();
+  return new Date(naive.getTime() - offsetMs);
 }
 
 export function percent(value: number): string {
@@ -102,7 +141,7 @@ export const VISIT_STATUS_LABEL: Record<string, string> = {
 };
 
 export function greeting(date = new Date()): string {
-  const hour = date.getHours();
+  const { hour } = zonedParts(date);
   if (hour < 12) return 'Bom dia';
   if (hour < 18) return 'Boa tarde';
   return 'Boa noite';

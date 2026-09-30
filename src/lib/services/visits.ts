@@ -1,6 +1,7 @@
 import type { VisitStatus } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { logger } from '@/lib/logger';
+import { todayKey } from '@/lib/utils';
 
 /**
  * Ciclo de vida da visita (secao 37).
@@ -166,6 +167,5 @@ export async function getClinicHistory(clinicId: string, organizationId: string)
 }
 
 function startOfToday(): Date {
-  const now = new Date();
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  return new Date(`${todayKey()}T00:00:00.000Z`);
 }

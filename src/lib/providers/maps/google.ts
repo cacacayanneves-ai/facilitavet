@@ -1,6 +1,6 @@
 import { logger } from '@/lib/logger';
 import type { LatLng, TravelMatrix, TravelMatrixRequest } from '@/lib/route-planner';
-import { buildGeocodeString, type GeocodeCandidate, type GeocodeQuery, type GeocodeResult, type MapsProvider } from './types';
+import { buildGeocodeString, classifyCandidates, type GeocodeCandidate, type GeocodeQuery, type GeocodeResult, type MapsProvider } from './types';
 
 interface GoogleOptions {
   apiKey: string;
@@ -79,12 +79,7 @@ export class GoogleMapsProvider implements MapsProvider {
       placeId: r.place_id,
     }));
 
-    // Mais de um resultado plausivel => o usuario decide (secao 9).
-    // Nao escolhemos silenciosamente o primeiro.
-    const precise = candidates.filter((c) => c.precision === 'ROOFTOP' || c.precision === 'RANGE_INTERPOLATED');
-    const status = candidates.length > 1 && precise.length !== 1 ? 'AMBIGUOUS' : 'RESOLVED';
-
-    return { status, candidates, provider: this.name };
+    return { status: classifyCandidates(candidates), candidates, provider: this.name };
   }
 
   /** Places API (New) Text Search — acha o estabelecimento pelo nome. */
@@ -127,11 +122,7 @@ export class GoogleMapsProvider implements MapsProvider {
       placeId: p.id,
     }));
 
-    // Mesma regra da geocodificacao por endereco: mais de um estabelecimento
-    // plausivel vira ambiguidade para o usuario escolher, nunca um palpite.
-    const status = candidates.length > 1 ? 'AMBIGUOUS' : 'RESOLVED';
-
-    return { status, candidates, provider: this.name };
+    return { status: classifyCandidates(candidates), candidates, provider: this.name };
   }
 
   async travelMatrix(request: TravelMatrixRequest): Promise<TravelMatrix> {

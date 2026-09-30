@@ -2,6 +2,7 @@ import { requireUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { Topbar } from '@/components/layout/topbar';
 import { ClinicsWorkspace } from './clinics-workspace';
+import { todayKey } from '@/lib/utils';
 
 export const metadata = { title: 'Carteira' };
 export const dynamic = 'force-dynamic';
@@ -21,7 +22,7 @@ export default async function ClinicsPage() {
       _count: true,
     }),
     prisma.visit.findMany({
-      where: { userId: user.id, status: 'PLANNED', date: { gte: new Date(new Date().toISOString().slice(0, 10)) } },
+      where: { userId: user.id, status: 'PLANNED', date: { gte: new Date(`${todayKey()}T00:00:00.000Z`) } },
       orderBy: { date: 'asc' },
       select: { clinicId: true, date: true },
     }),

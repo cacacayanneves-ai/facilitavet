@@ -52,3 +52,19 @@ export function buildGeocodeString(query: GeocodeQuery): string {
     .filter(Boolean)
     .join(', ');
 }
+
+/**
+ * Mais de um candidato plausivel => o usuario decide (secao 9); nunca
+ * escolhemos silenciosamente o primeiro. Um unico candidato preciso entre
+ * varios imprecisos (ex: rua exata + centro do bairro) resolve sozinho.
+ *
+ * Fica aqui, e nao dentro de cada provider, porque o cache tambem precisa
+ * reclassificar o que leu do banco — se as duas regras divergirem, uma
+ * ambiguidade vira "localizada" na segunda validacao.
+ */
+export function classifyCandidates(candidates: GeocodeCandidate[]): GeocodeResult['status'] {
+  if (candidates.length === 0) return 'FAILED';
+  if (candidates.length === 1) return 'RESOLVED';
+  const precise = candidates.filter((c) => c.precision === 'ROOFTOP' || c.precision === 'RANGE_INTERPOLATED');
+  return precise.length === 1 ? 'RESOLVED' : 'AMBIGUOUS';
+}

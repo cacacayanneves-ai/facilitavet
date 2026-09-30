@@ -1,6 +1,7 @@
 import ExcelJS from 'exceljs';
 import Papa from 'papaparse';
 import { z } from 'zod';
+import type { GeocodeStatus } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { getMapsProvider } from '@/lib/providers/maps';
@@ -491,7 +492,7 @@ export async function validateRows(args: {
     where: { organizationId },
     select: { name: true, neighborhood: true },
   });
-  const existingKeys = new Set(existing.map((c) => `${normalizeKey(c.name)}|${normalizeKey(c.neighborhood ?? '')}`));
+  const existingKeys = new Set(existing.map((c) => clinicKey(c.name, c.neighborhood)));
 
   const seenInFile = new Map<string, number>();
   const result: NormalizedRow[] = [];
@@ -572,7 +573,7 @@ export async function validateRows(args: {
       visitSplits = 1;
     }
 
-    const key = `${normalizeKey(name)}|${normalizeKey(neighborhood ?? '')}`;
+    const key = clinicKey(name, neighborhood);
     if (name) {
       if (seenInFile.has(key)) {
         issues.push({
@@ -684,12 +685,31 @@ export interface CommitSummary {
   withoutLocation: number;
 }
 
-/** Grava as linhas validas na carteira (etapa 11). */
+/**
+ * Grava as linhas validas na carteira (etapa 11).
+ *
+ * Reimportar e o uso normal (planilha atualizada todo mes), entao a clinica
+ * que ja existe e ATUALIZADA, nunca sobrescrita as cegas:
+ *  - o casamento usa a mesma chave normalizada da validacao (sem caixa nem
+ *    acento) — senao a revisao promete "sera atualizada" e o commit duplica;
+ *  - campo vazio na planilha nao apaga o que ja existe. A planilha real por
+ *    veterinario nem tem endereco/telefone; sem isso, reimportar apagaria o
+ *    que o usuario completou a mao na Carteira — inclusive a localizacao que
+ *    ele escolheu entre os enderecos ambiguos.
+ */
 export async function commitRows(args: {
   organizationId: string;
   rows: NormalizedRow[];
 }): Promise<CommitSummary> {
   const summary: CommitSummary = { created: 0, updated: 0, skipped: 0, withoutLocation: 0 };
+
+  const existingClinics = await prisma.clinic.findMany({
+    where: { organizationId: args.organizationId },
+    select: { id: true, name: true, neighborhood: true, latitude: true, longitude: true },
+  });
+  const byKey = new Map(
+    existingClinics.map((c) => [clinicKey(c.name, c.neighborhood), c] as const),
+  );
 
   for (const row of args.rows) {
     const blocking = row.issues.filter((i) => i.level === 'error');
@@ -698,10 +718,15 @@ export async function commitRows(args: {
       continue;
     }
 
-    const hasCoordinates = row.latitude !== null && row.longitude !== null;
-    if (!hasCoordinates) summary.withoutLocation += 1;
+    const key = clinicKey(row.name, row.neighborhood);
+    const existing = byKey.get(key);
+    const rowHasCoordinates = row.latitude !== null && row.longitude !== null;
+    const keepsExistingLocation =
+      !rowHasCoordinates && existing?.latitude != null && existing?.longitude != null;
 
-    const geocodeStatus = hasCoordinates
+    if (!rowHasCoordinates && !keepsExistingLocation) summary.withoutLocation += 1;
+
+    const geocodeStatus: GeocodeStatus = rowHasCoordinates
       ? row.geocodeStatus === 'MANUAL'
         ? 'MANUAL'
         : 'RESOLVED'
@@ -709,45 +734,64 @@ export async function commitRows(args: {
         ? 'AMBIGUOUS'
         : 'FAILED';
 
+    const location = rowHasCoordinates || !existing
+      ? {
+          latitude: row.latitude,
+          longitude: row.longitude,
+          geocodeStatus,
+          geocodeLabel: row.geocodeLabel,
+          geocodedAt: rowHasCoordinates ? new Date() : null,
+        }
+      : keepsExistingLocation
+        ? {}
+        : { geocodeStatus, geocodeLabel: row.geocodeLabel };
+
+    // Opcionais: so entram quando a planilha traz valor.
+    const optional = Object.fromEntries(
+      Object.entries({
+        address: row.address,
+        city: row.city,
+        state: row.state,
+        postalCode: row.postalCode,
+        phone: row.phone,
+        notes: row.notes,
+      }).filter(([, value]) => value !== null && value !== ''),
+    );
+
     const data = {
       name: row.name,
       category: row.category,
-      address: row.address,
       neighborhood: row.neighborhood,
-      city: row.city,
-      state: row.state,
-      postalCode: row.postalCode,
-      phone: row.phone,
-      notes: row.notes,
-      latitude: row.latitude,
-      longitude: row.longitude,
       veterinarians: row.veterinarians,
       visitSplits: row.visitSplits,
-      geocodeStatus,
-      geocodeLabel: row.geocodeLabel,
-      geocodedAt: hasCoordinates ? new Date() : null,
       active: row.active,
-    } as const;
-
-    const existing = await prisma.clinic.findFirst({
-      where: {
-        organizationId: args.organizationId,
-        name: row.name,
-        neighborhood: row.neighborhood,
-      },
-    });
+      ...optional,
+      ...location,
+    };
 
     if (existing) {
       await prisma.clinic.update({ where: { id: existing.id }, data });
       summary.updated += 1;
     } else {
-      await prisma.clinic.create({ data: { ...data, organizationId: args.organizationId } });
+      const created = await prisma.clinic.create({ data: { ...data, organizationId: args.organizationId } });
+      // Linha repetida na mesma planilha atualiza a que acabou de ser criada.
+      byKey.set(key, {
+        id: created.id,
+        name: created.name,
+        neighborhood: created.neighborhood,
+        latitude: created.latitude,
+        longitude: created.longitude,
+      });
       summary.created += 1;
     }
   }
 
   logger.info('Importacao concluida', { scope: 'import', ...summary });
   return summary;
+}
+
+function clinicKey(name: string, neighborhood: string | null): string {
+  return `${normalizeKey(name)}|${normalizeKey(neighborhood ?? '')}`;
 }
 
 function parseCoordinate(raw: string): number | null {

@@ -4,7 +4,7 @@ import { fromDateKey, monthRange, toDateKey } from '@/lib/services/calendar';
 import { Topbar } from '@/components/layout/topbar';
 import { Card, EmptyState } from '@/components/ui';
 import { MapWorkspace } from './map-workspace';
-import { todayKey } from '@/lib/utils';
+import { currentYearMonth, todayKey } from '@/lib/utils';
 
 export const metadata = { title: 'Mapa' };
 export const dynamic = 'force-dynamic';
@@ -17,8 +17,8 @@ export default async function MapPage({
   const user = await requireUser();
   const params = await searchParams;
 
-  const now = new Date();
-  const { start, end } = monthRange(now.getUTCFullYear(), now.getUTCMonth() + 1);
+  const now = currentYearMonth();
+  const { start, end } = monthRange(now.year, now.month);
 
   const routes = await prisma.route.findMany({
     where: { date: { gte: start, lte: end }, monthlyPlan: { userId: user.id } },

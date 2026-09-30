@@ -17,7 +17,7 @@ import {
   Tabs,
 } from '@/components/ui';
 import type { CategoryRuleSet, ScoreWeights } from '@/lib/route-planner';
-import { cn, monthName } from '@/lib/utils';
+import { cn, currentYearMonth, monthName } from '@/lib/utils';
 
 const WEEKDAYS = [
   { value: 0, short: 'D', label: 'Domingo' },
@@ -233,9 +233,9 @@ export function SettingsWorkspace(props: {
   // da mudanca antes de salvar.
   const forecast = React.useMemo(() => {
     const order = rules.alternatingOrder.filter((c) => rules.rules[c]?.enabled);
-    const now = new Date();
+    const now = currentYearMonth();
     return Array.from({ length: 6 }, (_, i) => {
-      const abs = now.getUTCFullYear() * 12 + now.getUTCMonth() + i;
+      const abs = now.year * 12 + (now.month - 1) + i;
       const year = Math.floor(abs / 12);
       const month = (abs % 12) + 1;
       const monthly = (Object.keys(rules.rules) as Array<keyof typeof rules.rules>).filter(
@@ -744,7 +744,7 @@ export function SettingsWorkspace(props: {
                       className="tabular"
                     />
                   </Field>
-                  <Field label="Horário de envio">
+                  <Field label="Horário de envio" hint="Horário de Brasília. O envio automático roda uma vez por dia, por volta das 8h: escolha um horário até 08:00.">
                     <Input
                       type="time"
                       value={settings.whatsappTime}
