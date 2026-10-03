@@ -48,7 +48,7 @@ export function AuthBrandPanel() {
 
         <dl className="mt-10 grid grid-cols-3 gap-6 border-t border-white/10 pt-8">
           {[
-            { value: 'Fixos · Vari', label: 'Frequência de visita por clínica' },
+            { value: 'Cat 1 · 2 · 3', label: 'Ciclo comercial configurável' },
             { value: 'Rotas por região', label: 'Clustering + otimização' },
             { value: '08:00', label: 'Roteiro no WhatsApp' },
           ].map((item) => (

@@ -126,15 +126,11 @@ export function formatNumber(value: number, decimals = 1): string {
   });
 }
 
-/**
- * Nome de cada categoria na tela. Internamente seguem CAT1/2/3; para o
- * usuario sao os nomes das abas da planilha dele: os FIXOS (visitados todo
- * mes) e as variaveis VARI 1 e VARI 2.
- */
+/** Nome de cada categoria na tela. Fonte unica: nao formatar "CAT1" em outro lugar. */
 export const CATEGORY_LABEL: Record<string, string> = {
-  CAT1: 'Fixos',
-  CAT2: 'Vari 1',
-  CAT3: 'Vari 2',
+  CAT1: 'Cat 1',
+  CAT2: 'Cat 2',
+  CAT3: 'Cat 3',
 };
 
 export function categoryLabel(category: string): string {

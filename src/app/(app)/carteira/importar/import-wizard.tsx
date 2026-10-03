@@ -415,7 +415,7 @@ function UploadStep({ onFile, busy }: { onFile: (file: File) => void; busy: bool
         <div className="mt-4 rounded-lg bg-ink-50 px-4 py-3 text-[11px] leading-relaxed text-ink-500">
           <p className="font-medium text-ink-700">O que a planilha precisa ter</p>
           <p className="mt-1">
-            No mínimo <strong>nome</strong> e <strong>categoria</strong> (Fixos / Vari 1 / Vari 2).
+            No mínimo <strong>nome</strong> e <strong>categoria</strong> (Cat 1 / Cat 2 / Cat 3).
             Endereço, bairro, cidade e CEP melhoram muito a localização, porque nome e bairro sozinhos
             frequentemente não bastam para encontrar o endereço exato. Também aceitamos uma linha por
             veterinário, com a categoria sendo o nome da aba (CAT 1, CAT 2, CAT 3).
@@ -608,9 +608,9 @@ function ReviewStep({
                           className="h-7 w-28 text-[11px]"
                         >
                           <option value="">Categoria...</option>
-                          <option value="CAT1">Fixos</option>
-                          <option value="CAT2">Vari 1</option>
-                          <option value="CAT3">Vari 2</option>
+                          <option value="CAT1">Cat 1</option>
+                          <option value="CAT2">Cat 2</option>
+                          <option value="CAT3">Cat 3</option>
                         </Select>
                       )}
 

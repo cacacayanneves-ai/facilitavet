@@ -114,7 +114,7 @@ describe('planilha real: uma linha por veterinario, categoria = aba', () => {
     expect(result.rows).toHaveLength(1);
     expect(result.rows[0].Categoria).toBe('CAT1');
     expect(result.rows[0]['Quantidade de veterinários']).toBe('4');
-    expect(result.notices.some((n) => n.includes('Cinco Estrelas') && n.includes('mantida Fixos'))).toBe(true);
+    expect(result.notices.some((n) => n.includes('Cinco Estrelas') && n.includes('mantida Cat 1'))).toBe(true);
   });
 
   it('veterinario sem clinica preenchida nao e contado e vira aviso, nao erro silencioso', async () => {

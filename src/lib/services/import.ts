@@ -668,7 +668,7 @@ export async function validateRows(args: {
         level: 'error',
         code: 'INVALID_CATEGORY',
         message: categoryRaw
-          ? `Categoria "${categoryRaw}" não reconhecida. Use Fixos, Vari 1 ou Vari 2 (ou Cat 1, Cat 2, Cat 3).`
+          ? `Categoria "${categoryRaw}" não reconhecida. Use Cat 1, Cat 2 ou Cat 3.`
           : 'Categoria não informada.',
       });
     }

@@ -548,8 +548,8 @@ export function SettingsWorkspace(props: {
                       setRules((r) => ({ ...r, alternatingOrder: e.target.value.split(',') as CategoryRuleSet['alternatingOrder'] }))
                     }
                   >
-                    <option value="CAT2,CAT3">Vari 1 → Vari 2</option>
-                    <option value="CAT3,CAT2">Vari 2 → Vari 1</option>
+                    <option value="CAT2,CAT3">Cat 2 → Cat 3</option>
+                    <option value="CAT3,CAT2">Cat 3 → Cat 2</option>
                   </Select>
                 </Field>
                 <Field label="Mês âncora" hint="Onde o rodízio começa.">

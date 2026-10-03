@@ -182,7 +182,7 @@ export function PlanningWorkspace(props: Props) {
               <div>
                 <p className="text-sm font-semibold text-ink-900">Regras deste mês</p>
                 <p className="mt-0.5 text-xs text-ink-500">
-                  O ciclo comercial decide quais categorias entram. Fixos é mensal; Vari 1 e Vari 2
+                  O ciclo comercial decide quais categorias entram. Cat 1 é mensal; Cat 2 e Cat 3
                   alternam mês sim, mês não.
                 </p>
               </div>

@@ -123,9 +123,9 @@ export function ClinicsWorkspace({
         onChange={(id) => setFilter(id as Filter)}
         tabs={[
           { id: 'ALL', label: 'Todas', count: clinics.filter((c) => c.active).length },
-          { id: 'CAT1', label: 'Fixos', count: counts.CAT1 ?? 0 },
-          { id: 'CAT2', label: 'Vari 1', count: counts.CAT2 ?? 0 },
-          { id: 'CAT3', label: 'Vari 2', count: counts.CAT3 ?? 0 },
+          { id: 'CAT1', label: 'Cat 1', count: counts.CAT1 ?? 0 },
+          { id: 'CAT2', label: 'Cat 2', count: counts.CAT2 ?? 0 },
+          { id: 'CAT3', label: 'Cat 3', count: counts.CAT3 ?? 0 },
           { id: 'NO_LOCATION', label: 'Sem localização', count: withoutLocation },
           { id: 'NO_ADDRESS', label: 'Sem endereço' },
           { id: 'INACTIVE', label: 'Inativas', count: clinics.filter((c) => !c.active).length },
@@ -412,9 +412,9 @@ function NewClinicDialog({
         <div className="grid grid-cols-2 gap-3">
           <Field label="Categoria">
             <Select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
-              <option value="CAT1">Fixos</option>
-              <option value="CAT2">Vari 1</option>
-              <option value="CAT3">Vari 2</option>
+              <option value="CAT1">Cat 1</option>
+              <option value="CAT2">Cat 2</option>
+              <option value="CAT3">Cat 3</option>
             </Select>
           </Field>
           <Field label="Veterinários" hint="Quantas visitas esta clínica vale.">

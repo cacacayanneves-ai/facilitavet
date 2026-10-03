@@ -243,13 +243,13 @@ function MapLegend({ hasContext, hasOrigin }: { hasContext: boolean; hasOrigin: 
         </span>
       )}
       <span className="inline-flex items-center gap-1.5">
-        <span className="size-2 rounded-full bg-[var(--color-cat1)]" /> Fixos
+        <span className="size-2 rounded-full bg-[var(--color-cat1)]" /> Cat 1
       </span>
       <span className="inline-flex items-center gap-1.5">
-        <span className="size-2 rounded-full bg-[var(--color-cat2)]" /> Vari 1
+        <span className="size-2 rounded-full bg-[var(--color-cat2)]" /> Cat 2
       </span>
       <span className="inline-flex items-center gap-1.5">
-        <span className="size-2 rounded-full bg-[var(--color-cat3)]" /> Vari 2
+        <span className="size-2 rounded-full bg-[var(--color-cat3)]" /> Cat 3
       </span>
       {hasContext && (
         <span className="inline-flex items-center gap-1.5">
