@@ -104,6 +104,11 @@ export async function generateMonthlyPlan(options: GeneratePlanOptions): Promise
           lastVisitedAt: true,
           veterinarians: true,
           visitSplits: true,
+          monthlyVisits: true,
+          allowedWeekdays: true,
+          preferredWeekdays: true,
+          oneVisitWeekday: true,
+          fixedVisitDate: true,
         },
       }),
       buildWorkCalendar({
@@ -152,6 +157,11 @@ export async function generateMonthlyPlan(options: GeneratePlanOptions): Promise
           lastVisitedAt: c.lastVisitedAt,
           veterinarians,
           visitSplits: remainingParts,
+          monthlyVisits: c.monthlyVisits,
+          allowedWeekdays: c.allowedWeekdays,
+          preferredWeekdays: c.preferredWeekdays,
+          oneVisitWeekday: c.oneVisitWeekday,
+          fixedDate: c.fixedVisitDate ? c.fixedVisitDate.toISOString().slice(0, 10) : null,
         };
       })
       .filter((c): c is PlannerClinic => c !== null);

@@ -52,6 +52,20 @@ export interface PlannerClinic extends LatLng {
   splitTotal?: number;
   /** Preenchido apos a expansao: id da clinica original (igual para todas as partes). */
   splitOf?: string;
+
+  /**
+   * Visitas exigidas no mes (coluna de frequencia da planilha). So vale no
+   * modo `frequency` das regras: 0 = fora do mes; ausente/null = 1.
+   */
+  monthlyVisits?: number | null;
+  /** Toda visita cai num destes dias (0=dom..6=sab). Vazio = qualquer dia. */
+  allowedWeekdays?: number[];
+  /** Preferencia de dia, nao obrigatoria. */
+  preferredWeekdays?: number[];
+  /** Clinica dividida: uma das partes cai neste dia ("um dia na quinta"). */
+  oneVisitWeekday?: number | null;
+  /** "YYYY-MM-DD": data marcada para a visita. */
+  fixedDate?: string | null;
 }
 
 export interface Anchor extends LatLng {
@@ -84,6 +98,12 @@ export interface CategoryRuleSet {
   anchorYear: number;
   /** Impede que uma clinica seja exigida por duas categorias no mesmo mes. */
   enforceExclusivity: boolean;
+  /**
+   * `cycle` (padrao): o ciclo de categorias e as cotas decidem quem entra no
+   * mes. `frequency`: a frequencia de cada clinica (planilha) decide — toda
+   * clinica com visita no mes entra, sem cota, e o ciclo e ignorado.
+   */
+  mode?: 'cycle' | 'frequency';
 }
 
 /** Pesos do score. Centralizados — nunca espalhados pelo codigo. */
@@ -238,7 +258,8 @@ export interface PlannerWarning {
     | 'DAY_OVERFLOW'
     | 'CLINIC_EXCEEDS_DAY'
     | 'DAY_EXCEEDS_WORKDAY'
-    | 'SPLIT_SEPARATION_UNMET';
+    | 'SPLIT_SEPARATION_UNMET'
+    | 'DAY_RULE_UNMET';
   message: string;
   details?: Record<string, unknown>;
 }

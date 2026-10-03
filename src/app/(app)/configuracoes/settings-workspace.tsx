@@ -17,7 +17,7 @@ import {
   Tabs,
 } from '@/components/ui';
 import type { CategoryRuleSet, ScoreWeights } from '@/lib/route-planner';
-import { cn, currentYearMonth, monthName } from '@/lib/utils';
+import { cn, currentYearMonth, monthName, categoryLabel } from '@/lib/utils';
 
 const WEEKDAYS = [
   { value: 0, short: 'D', label: 'Domingo' },
@@ -455,6 +455,17 @@ export function SettingsWorkspace(props: {
       {tab === 'regras' && (
         <div className="space-y-4">
           <Card>
+            <CardContent className="space-y-3">
+              <Switch
+                checked={rules.mode === 'frequency'}
+                onChange={(value) => setRules((r) => ({ ...r, mode: value ? 'frequency' : 'cycle' }))}
+                label="Planejar pela frequência da planilha"
+                description="Cada clínica entra no mês quantas vezes a coluna de frequência pede, com os dias combinados. Desligado, quem entra é decidido pelo ciclo de categorias abaixo. Liga sozinho ao importar uma planilha com frequência."
+              />
+            </CardContent>
+          </Card>
+
+          <Card className={cn(rules.mode === 'frequency' && 'opacity-60')}>
             <CardContent className="space-y-4">
               <div>
                 <p className="text-sm font-semibold text-ink-900">Ciclo de categorias</p>
@@ -476,7 +487,7 @@ export function SettingsWorkspace(props: {
                           style={{ background: `var(--color-${category.toLowerCase()})` }}
                         />
                         <span className="text-sm font-semibold text-ink-900">
-                          {category.replace('CAT', 'Cat ')}
+                          {categoryLabel(category)}
                         </span>
                         <Badge tone="neutral">{props.clinicCounts[category] ?? 0} na carteira</Badge>
 
@@ -537,8 +548,8 @@ export function SettingsWorkspace(props: {
                       setRules((r) => ({ ...r, alternatingOrder: e.target.value.split(',') as CategoryRuleSet['alternatingOrder'] }))
                     }
                   >
-                    <option value="CAT2,CAT3">Cat 2 → Cat 3</option>
-                    <option value="CAT3,CAT2">Cat 3 → Cat 2</option>
+                    <option value="CAT2,CAT3">Vari 1 → Vari 2</option>
+                    <option value="CAT3,CAT2">Vari 2 → Vari 1</option>
                   </Select>
                 </Field>
                 <Field label="Mês âncora" hint="Onde o rodízio começa.">
@@ -577,7 +588,7 @@ export function SettingsWorkspace(props: {
                     >
                       <span className="capitalize">{monthName(item.month).slice(0, 3)}</span>{' '}
                       <span className="text-ink-900">
-                        {item.categories.map((c) => c.replace('CAT', 'Cat ')).join(' + ')}
+                        {item.categories.map(categoryLabel).join(' + ')}
                       </span>
                     </span>
                   ))}

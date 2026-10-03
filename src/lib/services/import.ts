@@ -6,6 +6,8 @@ import { prisma } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { getMapsProvider } from '@/lib/providers/maps';
 import { normalizeKey } from '@/lib/route-planner';
+import { parseFixedDate, parseVisitFrequency } from './visit-frequency';
+import { categoryLabel } from '@/lib/utils';
 
 /**
  * IMPORTACAO DA CARTEIRA (secoes 8 a 10).
@@ -34,7 +36,9 @@ export type CanonicalField =
   | 'veterinarians'
   | 'visitSplits'
   | 'notes'
-  | 'active';
+  | 'active'
+  | 'frequency'
+  | 'fixedDate';
 
 export const CANONICAL_FIELDS: Array<{ field: CanonicalField; label: string; required: boolean }> = [
   { field: 'name', label: 'Nome da clinica', required: true },
@@ -53,6 +57,8 @@ export const CANONICAL_FIELDS: Array<{ field: CanonicalField; label: string; req
   { field: 'visitSplits', label: 'Dividir visita em quantas partes', required: false },
   { field: 'notes', label: 'Observacoes', required: false },
   { field: 'active', label: 'Ativo', required: false },
+  { field: 'frequency', label: 'Frequencia de visita', required: false },
+  { field: 'fixedDate', label: 'Data marcada', required: false },
 ];
 
 /** Sinonimos por campo — cobre os cabecalhos que aparecem na pratica. */
@@ -76,6 +82,8 @@ const FIELD_SYNONYMS: Record<CanonicalField, string[]> = {
   ],
   notes: ['observacoes', 'observacao', 'obs', 'notas', 'comentarios'],
   active: ['ativo', 'ativa', 'status', 'situacao'],
+  frequency: ['frequencia de visita', 'frequencia de visitas', 'frequencia', 'visitas no mes'],
+  fixedDate: ['data marcada', 'data da visita', 'data fixa', 'agendar', 'visitei esse mes', 'visitei'],
 };
 
 export interface ParsedSheet {
@@ -147,8 +155,8 @@ async function parseXlsx(buffer: Buffer): Promise<ParsedSheet> {
   const sheets = workbook.worksheets.filter((s) => s.rowCount > 1);
   if (sheets.length === 0) return { columns: [], rows: [], notices: [] };
 
-  const perVeterinarian = detectPerVeterinarianWorkbook(sheets);
-  if (perVeterinarian) return aggregatePerVeterinarianWorkbook(sheets);
+  const perVeterinarian = selectPerVeterinarianSheets(sheets);
+  if (perVeterinarian) return aggregatePerVeterinarianWorkbook(perVeterinarian.sheets, perVeterinarian.ignored);
 
   return readSheetAsRows(sheets[0]);
 }
@@ -165,21 +173,33 @@ async function parseXlsx(buffer: Buffer): Promise<ParsedSheet> {
  * nasce de CONTAR essas linhas, nao de uma coluna numerica que ninguem
  * preencheria a mao para 300+ linhas.
  *
- * Reconhecemos o formato por eliminacao: varias abas, cada uma com uma coluna
- * de clinica E uma coluna de veterinario, e NENHUMA coluna de categoria —
- * porque nesse formato a categoria e o proprio nome da aba (CAT 1, CAT 2...).
- * Uma planilha comum (com coluna "Categoria") nunca bate nesse teste e segue
- * pelo caminho de sempre. Nao exigimos 2+ abas: uma reimportacao de uma unica
- * categoria (o usuario exportou so a aba "CAT 2", por exemplo) e o mesmo
- * formato com uma aba so, e a combinacao de colunas ja e um sinal forte o
- * bastante sozinha.
+ * Reconhecemos o formato pelas abas que tem coluna de clinica E coluna de
+ * veterinario, sem coluna de categoria — a categoria e o nome da aba ("CAT 1"
+ * ou, na versao atual da planilha, "FIXOS" / "VARI 1" / "VARI 2"). Quando
+ * algumas abas tem nome de categoria e outras nao (uma aba "todos" que copia
+ * as demais, uma lista de PDVs, uma aba "NÃO" de quem saiu da carteira), so as
+ * de categoria entram — importar a copia consolidada duplicaria todo mundo.
+ * Uma unica aba sem nome de categoria tambem vale (reimportacao parcial).
  */
-function detectPerVeterinarianWorkbook(sheets: ExcelJS.Worksheet[]): boolean {
-  return sheets.every((sheet) => {
-    const columns = headerColumns(sheet);
-    const roles = detectRoles(columns);
+function selectPerVeterinarianSheets(
+  sheets: ExcelJS.Worksheet[],
+): { sheets: ExcelJS.Worksheet[]; ignored: string[] } | null {
+  const candidates = sheets.filter((sheet) => {
+    const roles = detectRoles(headerColumns(sheet));
     return roles.clinic && roles.veterinarian && !roles.category;
   });
+  if (candidates.length === 0) return null;
+
+  const categorized = candidates.filter((sheet) => normalizeCategory(sheet.name) !== null);
+  if (categorized.length > 0) {
+    return {
+      sheets: categorized,
+      ignored: sheets.filter((s) => !categorized.includes(s)).map((s) => s.name),
+    };
+  }
+  // Sem nenhuma aba com nome de categoria: o formato antigo exigia que TODAS
+  // as abas fossem de veterinario; mantem esse contrato.
+  return candidates.length === sheets.length ? { sheets: candidates, ignored: [] } : null;
 }
 
 interface SheetRoles {
@@ -188,17 +208,27 @@ interface SheetRoles {
   neighborhood: string | null;
   category: string | null;
   split: string | null;
+  address: string | null;
+  frequency: string | null;
+  schedule: string | null;
 }
 
-const CLINIC_SYNONYMS = ['clinica', 'clinicas', 'nome da clinica', 'estabelecimento'];
+const CLINIC_SYNONYMS = ['clinica', 'clinicas', 'nome da clinica', 'estabelecimento', 'de onde', 'local de atendimento'];
 const VETERINARIAN_SYNONYMS = [
   'nome dos veterinarios', 'nome do veterinario', 'veterinario', 'veterinarios', 'nome veterinario',
 ];
+// "NOME" sozinho so vale como veterinario em casamento exato: por substring
+// ele casaria com "Nome da clinica".
+const VETERINARIAN_EXACT = ['nome', 'nome completo'];
 const CATEGORY_SYNONYMS = ['categoria', 'cat', 'classificacao', 'segmento'];
 const NEIGHBORHOOD_SYNONYMS = ['bairro', 'regiao', 'distrito', 'zona'];
 // Coluna livre marcando cobertura por plantao — a mesma clinica tem gente
 // diferente presente em dias diferentes, entao uma visita nao alcanca todos.
-const SPLIT_FLAG_SYNONYMS = ['2 visitas', 'visitas', 'plantao', 'dividir visita', 'split'];
+const SPLIT_FLAG_SYNONYMS = ['2 visitas', 'plantao', 'dividir visita', 'split'];
+const ADDRESS_SYNONYMS = ['endereco', 'endereco completo', 'logradouro'];
+const FREQUENCY_SYNONYMS = ['frequencia de visita', 'frequencia de visitas', 'frequencia', 'visitas no mes'];
+// Instrucao de agenda escrita a mao: "colocar dia 16 de outubro".
+const SCHEDULE_SYNONYMS = ['visitei esse mes', 'visitei', 'data marcada', 'data da visita', 'data fixa', 'agendar'];
 
 function headerColumns(sheet: ExcelJS.Worksheet): string[] {
   const headerRow = sheet.getRow(1);
@@ -209,8 +239,10 @@ function headerColumns(sheet: ExcelJS.Worksheet): string[] {
   return columns.filter(Boolean);
 }
 
-function findColumn(columns: string[], synonyms: string[]): string | null {
-  const normalized = columns.map((c) => ({ raw: c, key: normalizeKey(c) }));
+function findColumn(columns: string[], synonyms: string[], exclude: Array<string | null> = []): string | null {
+  const normalized = columns
+    .filter((c) => !exclude.includes(c))
+    .map((c) => ({ raw: c, key: normalizeKey(c) }));
   const exact = normalized.find((c) => synonyms.includes(c.key));
   if (exact) return exact.raw;
   const partial = normalized.find((c) => synonyms.some((s) => c.key.includes(s)));
@@ -218,12 +250,21 @@ function findColumn(columns: string[], synonyms: string[]): string | null {
 }
 
 function detectRoles(columns: string[]): SheetRoles {
+  const clinic = findColumn(columns, CLINIC_SYNONYMS);
+  const veterinarian =
+    findColumn(columns, VETERINARIAN_SYNONYMS, [clinic]) ??
+    columns.find((c) => c !== clinic && VETERINARIAN_EXACT.includes(normalizeKey(c))) ??
+    null;
+  const frequency = findColumn(columns, FREQUENCY_SYNONYMS);
   return {
-    clinic: findColumn(columns, CLINIC_SYNONYMS),
-    veterinarian: findColumn(columns, VETERINARIAN_SYNONYMS),
+    clinic,
+    veterinarian,
     neighborhood: findColumn(columns, NEIGHBORHOOD_SYNONYMS),
     category: findColumn(columns, CATEGORY_SYNONYMS),
-    split: findColumn(columns, SPLIT_FLAG_SYNONYMS),
+    split: findColumn(columns, SPLIT_FLAG_SYNONYMS, [frequency]),
+    address: findColumn(columns, ADDRESS_SYNONYMS),
+    frequency,
+    schedule: findColumn(columns, SCHEDULE_SYNONYMS),
   };
 }
 
@@ -249,26 +290,41 @@ function isTruthyFlag(raw: string): boolean {
  * Uma linha pode ter clinica sem veterinario nomeado ainda — area nova, em
  * mapeamento. Essa linha registra a clinica (nao pode sumir da carteira),
  * mas nao conta como veterinario: nao ha ninguem para contar.
+ *
+ * Endereco: vale o da PRIMEIRA linha da clinica. Ao arrastar a celula para
+ * baixo no Google Sheets, o CEP das linhas seguintes e incrementado sozinho
+ * (23017-250, -251, -252...) — so a primeira linha e confiavel.
+ *
+ * Frequencia: a clinica e visitada tantas vezes quanto o veterinario que mais
+ * exige; com textos diferentes entre veterinarios, vale o do mais exigente e
+ * a diferenca vira aviso.
  */
-function aggregatePerVeterinarianWorkbook(sheets: ExcelJS.Worksheet[]): ParsedSheet {
+function aggregatePerVeterinarianWorkbook(sheets: ExcelJS.Worksheet[], ignoredSheets: string[] = []): ParsedSheet {
   interface Group {
     name: string;
     neighborhood: string;
+    address: string;
     veterinarians: number;
     split: boolean;
     byCategory: Map<string, number>;
     pendingRows: number;
+    frequencies: string[];
+    schedules: string[];
+    note: string;
   }
 
   const groups = new Map<string, Group>();
   const unassigned: string[] = [];
   const sheetLabels: string[] = [];
+  let hasFrequency = false;
 
   for (const sheet of sheets) {
     const columns = headerColumns(sheet);
     const roles = detectRoles(columns);
+    if (roles.frequency) hasFrequency = true;
     const category = normalizeCategory(sheet.name) ?? sheet.name.trim();
-    sheetLabels.push(`${sheet.name} → ${normalizeCategory(sheet.name) ?? 'categoria não reconhecida'}`);
+    const label = normalizeCategory(sheet.name);
+    sheetLabels.push(`${sheet.name.trim()} → ${label ? categoryLabel(label) : 'categoria não reconhecida'}`);
 
     sheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
       if (rowNumber === 1) return;
@@ -283,7 +339,7 @@ function aggregatePerVeterinarianWorkbook(sheets: ExcelJS.Worksheet[]): ParsedSh
       if (!vetName && !clinicName) return; // linha em branco
 
       if (!clinicName) {
-        unassigned.push(`${sheet.name}, linha ${rowNumber}${vetName ? `: ${vetName}` : ''}`);
+        unassigned.push(`${sheet.name.trim()}, linha ${rowNumber}${vetName ? `: ${vetName}` : ''}`);
         return;
       }
 
@@ -292,15 +348,30 @@ function aggregatePerVeterinarianWorkbook(sheets: ExcelJS.Worksheet[]): ParsedSh
       const group = groups.get(key) ?? {
         name: clinicName,
         neighborhood,
+        address: '',
         veterinarians: 0,
         split: false,
         byCategory: new Map<string, number>(),
         pendingRows: 0,
+        frequencies: [],
+        schedules: [],
+        note: '',
       };
       // Garante que a clinica tenha uma categoria mesmo se esta linha nao
       // tiver veterinario nomeado (senao uma clinica so-pendente nao teria
       // categoria nenhuma para desempatar).
       if (!group.byCategory.has(category)) group.byCategory.set(category, 0);
+      const addressCell = cellAt(roles.address);
+      if (isRouteExclusionNote(addressCell)) {
+        if (!group.note) group.note = addressCell;
+      } else if (!group.address) {
+        group.address = addressCell;
+      }
+
+      const frequency = cellAt(roles.frequency);
+      if (frequency) group.frequencies.push(frequency);
+      const schedule = cellAt(roles.schedule);
+      if (schedule && parseFixedDate(schedule)) group.schedules.push(schedule);
 
       if (vetName) {
         group.veterinarians += 1;
@@ -315,8 +386,14 @@ function aggregatePerVeterinarianWorkbook(sheets: ExcelJS.Worksheet[]): ParsedSh
 
   const conflicts: string[] = [];
   const pendingClinics: string[] = [];
+  const mixedFrequency: string[] = [];
+  const outOfMonth: string[] = [];
+  const fixedDates: string[] = [];
+  const excludedByNote: string[] = [];
   const rows: Array<Record<string, string>> = [];
   let totalNamedVets = 0;
+
+  const label = (group: Group) => `${group.name}${group.neighborhood ? ` (${group.neighborhood})` : ''}`;
 
   for (const group of groups.values()) {
     // So entram no desempate categorias com veterinario de verdade — uma
@@ -330,9 +407,9 @@ function aggregatePerVeterinarianWorkbook(sheets: ExcelJS.Worksheet[]): ParsedSh
     if (named.length > 1) {
       const detail = named
         .sort((a, b) => b[1] - a[1])
-        .map(([cat, count]) => `${cat} (${count})`)
+        .map(([cat, count]) => `${categoryLabel(cat)} (${count})`)
         .join(' e ');
-      conflicts.push(`${group.name}${group.neighborhood ? ` (${group.neighborhood})` : ''}: ${detail} — mantida ${winningCategory}.`);
+      conflicts.push(`${label(group)}: ${detail} — mantida ${categoryLabel(winningCategory)}.`);
     }
 
     // Clinica so com linhas "sem veterinario nomeado ainda": entra na
@@ -340,24 +417,70 @@ function aggregatePerVeterinarianWorkbook(sheets: ExcelJS.Worksheet[]): ParsedSh
     // clinica) em vez de sumir, mas o usuario precisa saber que o numero e
     // um palpite, nao um dado real.
     const veterinarians = group.veterinarians > 0 ? group.veterinarians : 1;
-    if (group.veterinarians === 0) {
-      pendingClinics.push(`${group.name}${group.neighborhood ? ` (${group.neighborhood})` : ''}`);
-    }
+    if (group.veterinarians === 0) pendingClinics.push(label(group));
     totalNamedVets += group.veterinarians;
+
+    let frequency = '';
+    if (group.frequencies.length > 0) {
+      const distinct = [...new Set(group.frequencies.map((f) => f.trim()))];
+      // O mais exigente (mais visitas); empate: o texto mais comum.
+      frequency = distinct.sort((a, b) => {
+        const diff = parseVisitFrequency(b).visits - parseVisitFrequency(a).visits;
+        if (diff !== 0) return diff;
+        const count = (t: string) => group.frequencies.filter((f) => f.trim() === t).length;
+        return count(b) - count(a);
+      })[0];
+      if (distinct.length > 1) mixedFrequency.push(`${label(group)}: usada "${frequency}"`);
+    }
+    if (hasFrequency && !group.note && parseVisitFrequency(frequency).visits === 0) outOfMonth.push(label(group));
+
+    const schedule = group.schedules[0] ?? '';
+    if (schedule) fixedDates.push(`${label(group)}: ${formatDateKey(parseFixedDate(schedule)!)}`);
 
     rows.push({
       'Nome da clínica': group.name,
       Categoria: winningCategory,
       Bairro: group.neighborhood,
+      'Endereço': group.address,
       'Quantidade de veterinários': String(veterinarians),
       'Dividir visita em quantas partes': group.split ? '2' : '',
+      'Frequência de visita': group.note ? '' : frequency,
+      'Data marcada': schedule,
+      'Observações': group.note,
     });
+    if (group.note) excludedByNote.push(label(group));
   }
 
   const notices: string[] = [
     `${sheets.length === 1 ? 'A aba foi lida' : `${sheets.length} abas foram lidas`} como categoria${sheets.length === 1 ? '' : 's'} (${sheetLabels.join(', ')}); cada linha era um veterinário, agrupamos por clínica.`,
     `${rows.length} clínicas identificadas a partir de ${totalNamedVets} linhas de veterinário nomeado.`,
   ];
+  if (ignoredSheets.length > 0) {
+    notices.push(`Abas ignoradas por não serem de categoria: ${ignoredSheets.join(', ')}.`);
+  }
+  if (hasFrequency) {
+    notices.push(
+      'Usamos a coluna de frequência de visita: cada clínica entra no mês quantas vezes a frequência pede, e restrições como "sempre sexta" ou "terça ou quinta" são respeitadas no roteiro. Para o próximo mês, basta alterar a frequência na planilha e importar de novo.',
+    );
+  }
+  if (excludedByNote.length > 0) {
+    notices.push(
+      `${excludedByNote.length} clínica(s) marcadas como "não colocar no roteiro" (visita online) ficaram fora do roteiro, com a anotação guardada nas observações: ${excludedByNote.join('; ')}.`,
+    );
+  }
+  if (fixedDates.length > 0) {
+    notices.push(`${fixedDates.length} clínica(s) com data marcada na planilha: ${fixedDates.join('; ')}.`);
+  }
+  if (outOfMonth.length > 0) {
+    notices.push(
+      `${outOfMonth.length} clínica(s) sem frequência preenchida ficam fora deste mês (continuam na carteira): ${outOfMonth.slice(0, 15).join('; ')}${outOfMonth.length > 15 ? '…' : ''}.`,
+    );
+  }
+  if (mixedFrequency.length > 0) {
+    notices.push(
+      `${mixedFrequency.length} clínica(s) têm frequências diferentes entre os veterinários; usamos a mais exigente: ${mixedFrequency.join('; ')}.`,
+    );
+  }
   if (conflicts.length > 0) {
     notices.push(
       `${conflicts.length} clínica(s) apareceram em mais de uma categoria — mantivemos a categoria com mais veterinários e somamos todos na contagem: ${conflicts.join(' ')}`,
@@ -374,11 +497,26 @@ function aggregatePerVeterinarianWorkbook(sheets: ExcelJS.Worksheet[]): ParsedSh
     );
   }
 
-  return {
-    columns: ['Nome da clínica', 'Categoria', 'Bairro', 'Quantidade de veterinários', 'Dividir visita em quantas partes'],
-    rows,
-    notices,
-  };
+  const columns = ['Nome da clínica', 'Categoria', 'Bairro', 'Endereço', 'Quantidade de veterinários', 'Dividir visita em quantas partes'];
+  if (hasFrequency) columns.push('Frequência de visita', 'Data marcada');
+  if (excludedByNote.length > 0) columns.push('Observações');
+
+  return { columns, rows, notices };
+}
+
+/**
+ * Anotacao escrita na coluna de endereco que NAO e endereco: "veterinario que
+ * faço visita online, NÃO COLOCAR NO ROTEIRO". Mandar isso ao Google como
+ * endereco gasta credito e pode devolver um lugar qualquer.
+ */
+function isRouteExclusionNote(text: string): boolean {
+  const key = normalizeKey(text);
+  return /nao colocar|fora do roteiro|visita online|atendimento online|\bonline\b/.test(key);
+}
+
+function formatDateKey(key: string): string {
+  const [year, month, day] = key.split('-');
+  return `${day}/${month}/${year}`;
 }
 
 function cellToString(value: ExcelJS.CellValue): string {
@@ -453,16 +591,30 @@ export interface NormalizedRow {
   visitSplits: number;
   notes: string | null;
   active: boolean;
+  /**
+   * Visitas exigidas no mes, da coluna de frequencia. null = a planilha nao
+   * tem essa coluna (a clinica segue o ciclo de categorias).
+   */
+  monthlyVisits: number | null;
+  allowedWeekdays: number[];
+  preferredWeekdays: number[];
+  oneVisitWeekday: number | null;
+  /** "YYYY-MM-DD" da data marcada, quando houver. */
+  fixedVisitDate: string | null;
+  /** Texto original da frequencia. */
+  visitRule: string | null;
   issues: RowIssue[];
   geocodeStatus: 'PENDING' | 'RESOLVED' | 'AMBIGUOUS' | 'FAILED' | 'MANUAL';
   geocodeLabel: string | null;
   geocodeCandidates: Array<{ lat: number; lng: number; label: string }>;
 }
 
+// "FIXOS" / "VARI 1" / "VARI 2" e como a planilha atual nomeia as abas: os
+// fixos sao visitados todo mes (Cat 1); as variaveis sao Cat 2 e Cat 3.
 const CATEGORY_PATTERNS: Array<{ pattern: RegExp; category: 'CAT1' | 'CAT2' | 'CAT3' }> = [
-  { pattern: /^(cat\s*)?0*1$|^categoria\s*0*1$|^a$/i, category: 'CAT1' },
-  { pattern: /^(cat\s*)?0*2$|^categoria\s*0*2$|^b$/i, category: 'CAT2' },
-  { pattern: /^(cat\s*)?0*3$|^categoria\s*0*3$|^c$/i, category: 'CAT3' },
+  { pattern: /^(cat\s*)?0*1$|^categoria\s*0*1$|^a$|^fix[oa]s?$/i, category: 'CAT1' },
+  { pattern: /^(cat\s*)?0*2$|^categoria\s*0*2$|^b$|^vari[a-z]*\s*0*1$/i, category: 'CAT2' },
+  { pattern: /^(cat\s*)?0*3$|^categoria\s*0*3$|^c$|^vari[a-z]*\s*0*2$/i, category: 'CAT3' },
 ];
 
 export function normalizeCategory(raw: string): 'CAT1' | 'CAT2' | 'CAT3' | null {
@@ -516,7 +668,7 @@ export async function validateRows(args: {
         level: 'error',
         code: 'INVALID_CATEGORY',
         message: categoryRaw
-          ? `Categoria "${categoryRaw}" não reconhecida. Use Cat 1, Cat 2 ou Cat 3.`
+          ? `Categoria "${categoryRaw}" não reconhecida. Use Fixos, Vari 1 ou Vari 2 (ou Cat 1, Cat 2, Cat 3).`
           : 'Categoria não informada.',
       });
     }
@@ -568,6 +720,15 @@ export async function validateRows(args: {
       const parsed = Number.parseInt(visitSplitsRaw.replace(/\D/g, ''), 10);
       if (Number.isFinite(parsed) && parsed > 1) visitSplits = parsed;
     }
+
+    // Frequencia do mes. "2x no mes em dias alternados" e a mesma regra do
+    // antigo "2 VISITAS" (plantao: equipe diferente em cada dia), entao vira
+    // visita dividida em partes, cada uma num dia diferente.
+    const visitRule = mapping.frequency ? get('frequency') || null : null;
+    const frequency = mapping.frequency ? parseVisitFrequency(visitRule) : null;
+    if (frequency && frequency.visits > 1 && visitSplits === 1) visitSplits = frequency.visits;
+    const fixedVisitDate = mapping.fixedDate ? parseFixedDate(get('fixedDate')) : null;
+
     if (visitSplits > veterinarians) {
       // Nao da para dividir a visita em mais partes do que ha veterinarios.
       visitSplits = 1;
@@ -609,6 +770,12 @@ export async function validateRows(args: {
       visitSplits,
       notes: get('notes') || null,
       active: parseActive(get('active')),
+      monthlyVisits: frequency ? frequency.visits : null,
+      allowedWeekdays: frequency?.allowedWeekdays ?? [],
+      preferredWeekdays: frequency?.preferredWeekdays ?? [],
+      oneVisitWeekday: frequency?.oneVisitWeekday ?? null,
+      fixedVisitDate,
+      visitRule,
       issues,
       geocodeStatus: latitude !== null && longitude !== null ? 'MANUAL' : 'PENDING',
       geocodeLabel: null,
@@ -637,6 +804,9 @@ export async function geocodeRows(
   for (const row of rows) {
     if (row.geocodeStatus !== 'PENDING') continue;
     if (!row.name && !row.address) continue;
+    // Fora do mes (frequencia vazia/0): nao vai ao roteiro agora; localizar
+    // custaria credito do Google sem uso. Localiza quando voltar a ter visita.
+    if (row.monthlyVisits === 0) continue;
     if (processed >= limit) break;
     processed += 1;
 
@@ -679,6 +849,8 @@ export async function geocodeRows(
 }
 
 export interface CommitSummary {
+  /** Clinicas da carteira ausentes da planilha de frequencia: ficam fora do mes. */
+  outOfMonth?: number;
   created: number;
   updated: number;
   skipped: number;
@@ -702,6 +874,9 @@ export async function commitRows(args: {
   rows: NormalizedRow[];
 }): Promise<CommitSummary> {
   const summary: CommitSummary = { created: 0, updated: 0, skipped: 0, withoutLocation: 0 };
+  // Planilha com frequencia e a fonte da verdade do mes (ver Clinic.monthlyVisits).
+  const frequencySheet = args.rows.some((r) => r.monthlyVisits !== null);
+  const presentKeys = new Set(args.rows.filter((r) => r.name).map((r) => clinicKey(r.name, r.neighborhood)));
 
   const existingClinics = await prisma.clinic.findMany({
     where: { organizationId: args.organizationId },
@@ -758,6 +933,20 @@ export async function commitRows(args: {
       }).filter(([, value]) => value !== null && value !== ''),
     );
 
+    // Agenda do mes: sempre sobrescreve (a planilha nova e o mes novo),
+    // inclusive limpando a data marcada do mes anterior.
+    const schedule =
+      row.monthlyVisits === null
+        ? {}
+        : {
+            monthlyVisits: row.monthlyVisits,
+            allowedWeekdays: row.allowedWeekdays,
+            preferredWeekdays: row.preferredWeekdays,
+            oneVisitWeekday: row.oneVisitWeekday,
+            fixedVisitDate: row.fixedVisitDate ? new Date(`${row.fixedVisitDate}T00:00:00.000Z`) : null,
+            visitRule: row.visitRule,
+          };
+
     const data = {
       name: row.name,
       category: row.category,
@@ -767,6 +956,7 @@ export async function commitRows(args: {
       active: row.active,
       ...optional,
       ...location,
+      ...schedule,
     };
 
     if (existing) {
@@ -784,6 +974,19 @@ export async function commitRows(args: {
       });
       summary.created += 1;
     }
+  }
+
+  if (frequencySheet) {
+    const absentIds = existingClinics
+      .filter((c) => !presentKeys.has(clinicKey(c.name, c.neighborhood)))
+      .map((c) => c.id);
+    if (absentIds.length > 0) {
+      await prisma.clinic.updateMany({
+        where: { id: { in: absentIds } },
+        data: { monthlyVisits: 0, fixedVisitDate: null },
+      });
+    }
+    summary.outOfMonth = absentIds.length;
   }
 
   logger.info('Importacao concluida', { scope: 'import', ...summary });

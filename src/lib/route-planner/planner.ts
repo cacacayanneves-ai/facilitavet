@@ -8,6 +8,7 @@ import { scoreRoute } from './scoring';
 import { selectClinicsForMonth, visitWeightOf } from './selection';
 import { optimizeSequence, evaluate, type SequenceProblem } from './sequencing';
 import { expandSplitClinics, insertDeferredParts, realClinicId } from './split-visits';
+import { applyDayRules } from './day-rules';
 import type {
   CategoryCode,
   LatLng,
@@ -223,6 +224,9 @@ export async function generatePlan(
   for (const w of best.splitWarnings) {
     warnings.push({ code: 'SPLIT_SEPARATION_UNMET', message: w.message, details: { groupId: w.groupId } });
   }
+  for (const w of best.dayRuleWarnings) {
+    warnings.push({ code: 'DAY_RULE_UNMET', message: w.message, details: { clinicId: w.clinicId } });
+  }
 
   // -------------------------------------------------------------------------
   // Comparacao com a linha de base (secao 34/67): so mostramos economia quando
@@ -314,6 +318,7 @@ interface EvaluatedSolution {
   totalDurationSeconds: number;
   averageScore: number;
   splitWarnings: Array<{ groupId: string; message: string }>;
+  dayRuleWarnings: Array<{ clinicId: string; message: string }>;
 }
 
 interface MatrixState {
@@ -412,7 +417,18 @@ async function buildSolution(args: {
 
   const finalPoints = inserted.points;
   const finalWeights = inserted.weights;
-  const clusters = inserted.clusters;
+  const ruled = applyDayRules({
+    clusters: inserted.clusters,
+    clusterOrder,
+    pointIds: finalPoints.map((p) => p.id),
+    weights: finalWeights,
+    clinicById,
+    availableDays,
+    maxPerDay: preferences.maxVisitsPerDay,
+    minPerDay: preferences.minVisitsPerDay,
+    minDaysBetweenSplitVisits: preferences.minDaysBetweenSplitVisits,
+  });
+  const clusters = ruled.clusters;
 
   // Meta ideal por dia, em VISITAS: e contra ela que o score mede
   // desequilibrio. Comparar o dia com ele mesmo zeraria o termo `balance` e o
@@ -467,6 +483,7 @@ async function buildSolution(args: {
     totalDurationSeconds,
     averageScore: scoredDays > 0 ? scoreSum / scoredDays : 0,
     splitWarnings: inserted.warnings,
+    dayRuleWarnings: ruled.warnings,
   };
 }
 

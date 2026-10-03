@@ -14,7 +14,7 @@ import {
 } from '@/components/ui';
 import type { CalendarDay } from '@/lib/services/calendar';
 import type { FeasibilityReport } from '@/lib/route-planner';
-import { cn, formatDuration, formatKm, formatNumber, monthName } from '@/lib/utils';
+import { cn, formatDuration, formatKm, formatNumber, monthName, categoryLabel } from '@/lib/utils';
 import { GenerationProgress } from './generation-progress';
 
 interface Props {
@@ -30,6 +30,14 @@ interface Props {
   categoryTargets: Record<string, number>;
   availableVisits: number;
   feasibility: FeasibilityReport;
+  /** Presente quando o mes e definido pela frequencia da planilha. */
+  frequency: {
+    categories: string[];
+    visitsByCategory: Record<string, number>;
+    clinicsInMonth: number;
+    outOfMonth: number;
+    withDayRule: number;
+  } | null;
   existingPlan: {
     id: string;
     generatedAt: string | null;
@@ -43,7 +51,9 @@ interface Props {
 
 export function PlanningWorkspace(props: Props) {
   const router = useRouter();
-  const [target, setTarget] = React.useState(props.existingPlan?.targetVisits ?? props.monthlyTarget);
+  const [target, setTarget] = React.useState(
+    props.frequency ? props.monthlyTarget : (props.existingPlan?.targetVisits ?? props.monthlyTarget),
+  );
   const [generating, setGenerating] = React.useState(false);
   const [result, setResult] = React.useState<GenerationResult | null>(null);
   const [error, setError] = React.useState<string | null>(null);
@@ -106,7 +116,7 @@ export function PlanningWorkspace(props: Props) {
   }
 
   const totalClinics = Object.values(props.clinicsByCategory).reduce((a, b) => a + b, 0);
-  const requiredCategories = props.forecast[0]?.categories ?? [];
+  const requiredCategories = props.frequency?.categories ?? props.forecast[0]?.categories ?? [];
 
   return (
     <div className="space-y-6">
@@ -127,7 +137,7 @@ export function PlanningWorkspace(props: Props) {
         <div className="flex items-center gap-2">
           {requiredCategories.map((category) => (
             <Badge key={category} tone={category === 'CAT1' ? 'cat1' : category === 'CAT2' ? 'cat2' : 'cat3'}>
-              {category.replace('CAT', 'Cat ')}
+              {categoryLabel(category)}
             </Badge>
           ))}
         </div>
@@ -137,12 +147,42 @@ export function PlanningWorkspace(props: Props) {
         {/* Coluna principal */}
         <div className="space-y-6">
           {/* Regras do mes */}
+          {props.frequency ? (
+            <Card>
+              <CardContent className="space-y-4">
+                <div>
+                  <p className="text-sm font-semibold text-ink-900">Mês pela frequência da planilha</p>
+                  <p className="mt-0.5 text-xs text-ink-500">
+                    Cada clínica entra quantas vezes a frequência pede, respeitando os dias combinados
+                    (ex: sempre sexta, data marcada). Para mudar o mês, altere a frequência na planilha e
+                    importe de novo.
+                  </p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  {(['CAT1', 'CAT2', 'CAT3'] as const).map((category) => (
+                    <div key={category} className="rounded-xl border border-brand-200 bg-brand-50/60 px-3.5 py-3">
+                      <span className="text-xs font-semibold text-ink-800">{categoryLabel(category)}</span>
+                      <p className="tabular mt-1.5 text-xl font-semibold text-ink-900">
+                        {props.frequency!.visitsByCategory[category] ?? 0}
+                      </p>
+                      <p className="text-[11px] text-ink-400">visitas no mês</p>
+                    </div>
+                  ))}
+                </div>
+                <p className="border-t border-ink-200 pt-3 text-[11px] text-ink-500">
+                  {props.frequency.clinicsInMonth} clínicas no mês
+                  {props.frequency.withDayRule > 0 && ` · ${props.frequency.withDayRule} com dia combinado`}
+                  {props.frequency.outOfMonth > 0 && ` · ${props.frequency.outOfMonth} fora deste mês`}
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
           <Card>
             <CardContent className="space-y-4">
               <div>
                 <p className="text-sm font-semibold text-ink-900">Regras deste mês</p>
                 <p className="mt-0.5 text-xs text-ink-500">
-                  O ciclo comercial decide quais categorias entram. Cat 1 é mensal; Cat 2 e Cat 3
+                  O ciclo comercial decide quais categorias entram. Fixos é mensal; Vari 1 e Vari 2
                   alternam mês sim, mês não.
                 </p>
               </div>
@@ -162,7 +202,7 @@ export function PlanningWorkspace(props: Props) {
                     >
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-semibold text-ink-800">
-                          {category.replace('CAT', 'Cat ')}
+                          {categoryLabel(category)}
                         </span>
                         {required ? (
                           <Badge tone="brand">no mês</Badge>
@@ -190,12 +230,13 @@ export function PlanningWorkspace(props: Props) {
                     className="rounded-md bg-ink-100 px-1.5 py-0.5 text-[10px] font-medium text-ink-500"
                   >
                     {monthName(item.month).slice(0, 3)}{' '}
-                    {item.categories.map((c) => c.replace('CAT', '')).join('+')}
+                    {item.categories.map(categoryLabel).join(' + ')}
                   </span>
                 ))}
               </div>
             </CardContent>
           </Card>
+          )}
 
           {/* Calendario de dias uteis */}
           <Card>
@@ -280,7 +321,7 @@ export function PlanningWorkspace(props: Props) {
                 label="Visitas no mês"
                 hint={
                   availableDays > 0
-                    ? `≈ ${perDay.toFixed(1).replace('.', ',')} visitas por dia`
+                    ? `≈ ${perDay.toFixed(1).replace('.', ',')} visitas por dia${props.frequency ? ' · definido pela planilha' : ''}`
                     : 'Nenhum dia disponível'
                 }
               >
@@ -289,6 +330,7 @@ export function PlanningWorkspace(props: Props) {
                   min={1}
                   max={1000}
                   value={target}
+                  disabled={Boolean(props.frequency)}
                   onChange={(e) => setTarget(Math.max(1, Number(e.target.value) || 0))}
                   className="tabular text-lg font-semibold"
                 />

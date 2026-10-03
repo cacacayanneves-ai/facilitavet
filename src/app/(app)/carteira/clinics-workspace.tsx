@@ -33,6 +33,8 @@ export interface ClinicRow {
   longitude: number | null;
   veterinarians: number;
   visitSplits: number;
+  /** Frequencia e dia combinado ja resumidos ("2x · uma na qui"), quando vierem da planilha. */
+  visitRule: string | null;
   geocodeStatus: string;
   lastVisitedAt: string | null;
   nextVisitDate: string | null;
@@ -121,9 +123,9 @@ export function ClinicsWorkspace({
         onChange={(id) => setFilter(id as Filter)}
         tabs={[
           { id: 'ALL', label: 'Todas', count: clinics.filter((c) => c.active).length },
-          { id: 'CAT1', label: 'Cat 1', count: counts.CAT1 ?? 0 },
-          { id: 'CAT2', label: 'Cat 2', count: counts.CAT2 ?? 0 },
-          { id: 'CAT3', label: 'Cat 3', count: counts.CAT3 ?? 0 },
+          { id: 'CAT1', label: 'Fixos', count: counts.CAT1 ?? 0 },
+          { id: 'CAT2', label: 'Vari 1', count: counts.CAT2 ?? 0 },
+          { id: 'CAT3', label: 'Vari 2', count: counts.CAT3 ?? 0 },
           { id: 'NO_LOCATION', label: 'Sem localização', count: withoutLocation },
           { id: 'NO_ADDRESS', label: 'Sem endereço' },
           { id: 'INACTIVE', label: 'Inativas', count: clinics.filter((c) => !c.active).length },
@@ -158,6 +160,9 @@ export function ClinicsWorkspace({
                     <td className="px-5 py-2.5">
                       <p className="text-sm font-medium text-ink-900">{clinic.name}</p>
                       {clinic.address && <p className="text-[11px] text-ink-400">{clinic.address}</p>}
+                      {clinic.visitRule && (
+                        <p className="text-[11px] font-medium text-brand-700">{clinic.visitRule}</p>
+                      )}
                     </td>
                     <td className="px-3 py-2.5">
                       <CategoryBadge category={clinic.category} />
@@ -407,9 +412,9 @@ function NewClinicDialog({
         <div className="grid grid-cols-2 gap-3">
           <Field label="Categoria">
             <Select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
-              <option value="CAT1">Cat 1 — mensal</option>
-              <option value="CAT2">Cat 2 — alternada</option>
-              <option value="CAT3">Cat 3 — alternada</option>
+              <option value="CAT1">Fixos</option>
+              <option value="CAT2">Vari 1</option>
+              <option value="CAT3">Vari 2</option>
             </Select>
           </Field>
           <Field label="Veterinários" hint="Quantas visitas esta clínica vale.">

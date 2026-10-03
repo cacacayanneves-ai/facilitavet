@@ -52,13 +52,29 @@ export default async function PlanningPage({
         latitude: { not: null },
         longitude: { not: null },
       },
-      select: { id: true, name: true, category: true, veterinarians: true, visitSplits: true },
+      select: {
+        id: true,
+        name: true,
+        category: true,
+        veterinarians: true,
+        visitSplits: true,
+        monthlyVisits: true,
+        allowedWeekdays: true,
+        oneVisitWeekday: true,
+        fixedVisitDate: true,
+      },
     }),
   ]);
 
   const availableDays = calendar.filter((d) => d.available).length;
   const forecast = categoryForecast(rules, year, month, 6);
-  const requiredCategories = forecast[0].categories;
+  // Modo frequencia: quem entra no mes e a planilha (Clinic.monthlyVisits),
+  // nao o ciclo — a previa precisa contar exatamente o que o motor vai usar.
+  const frequencyMode = rules.mode === 'frequency';
+  const inMonth = activeClinics.filter((c) => (c.monthlyVisits ?? 1) > 0);
+  const requiredCategories = frequencyMode
+    ? (['CAT1', 'CAT2', 'CAT3'] as const).filter((cat) => inMonth.some((c) => c.category === cat))
+    : forecast[0].categories;
 
   // Clinicas por categoria (exibicao) e visitas (veterinarios) disponiveis por
   // categoria (matematica da meta) — sao numeros diferentes de proposito.
@@ -67,20 +83,22 @@ export default async function PlanningPage({
     clinicStats.map((c) => [c.category, c._sum.veterinarians ?? 0]),
   ) as Record<string, number>;
 
-  const requiredVisits = Math.min(
-    settings.monthlyTarget,
-    requiredCategories.reduce(
-      (sum, category) => sum + Math.min(rules.rules[category]?.targetCount ?? 0, visitsByCategory[category] ?? 0),
-      0,
-    ),
-  );
+  const requiredVisits = frequencyMode
+    ? inMonth.reduce((sum, c) => sum + c.veterinarians, 0)
+    : Math.min(
+        settings.monthlyTarget,
+        requiredCategories.reduce(
+          (sum, category) => sum + Math.min(rules.rules[category]?.targetCount ?? 0, visitsByCategory[category] ?? 0),
+          0,
+        ),
+      );
 
   // Roda a MESMA verificacao de viabilidade do motor (incluindo o caso de
   // clinicas cujo numero de veterinarios sozinho estoura o limite diario),
   // para que esta previa nunca diga "viavel" quando o planejamento real nao
   // conseguiria gerar o mes.
-  const eligibleClinics: PlannerClinic[] = activeClinics
-    .filter((c) => requiredCategories.includes(c.category))
+  const eligibleClinics: PlannerClinic[] = (frequencyMode ? inMonth : activeClinics)
+    .filter((c) => (requiredCategories as readonly string[]).includes(c.category))
     .map((c) => ({
       id: c.id,
       name: c.name,
@@ -108,7 +126,25 @@ export default async function PlanningPage({
         <PlanningWorkspace
           year={year}
           month={month}
-          monthlyTarget={settings.monthlyTarget}
+          monthlyTarget={frequencyMode ? requiredVisits : settings.monthlyTarget}
+          frequency={
+            frequencyMode
+              ? {
+                  categories: [...requiredCategories],
+                  visitsByCategory: Object.fromEntries(
+                    requiredCategories.map((cat) => [
+                      cat,
+                      inMonth.filter((c) => c.category === cat).reduce((sum, c) => sum + c.veterinarians, 0),
+                    ]),
+                  ),
+                  clinicsInMonth: inMonth.length,
+                  outOfMonth: activeClinics.length - inMonth.length,
+                  withDayRule: inMonth.filter(
+                    (c) => c.allowedWeekdays.length > 0 || c.oneVisitWeekday !== null || c.fixedVisitDate !== null,
+                  ).length,
+                }
+              : null
+          }
           minPerDay={settings.minVisitsPerDay}
           maxPerDay={settings.maxVisitsPerDay}
           calendar={calendar}

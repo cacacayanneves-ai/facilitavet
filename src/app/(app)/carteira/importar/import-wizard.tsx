@@ -14,7 +14,8 @@ import {
   Select,
   Spinner,
 } from '@/components/ui';
-import { cn } from '@/lib/utils';
+import { cn, categoryLabel } from '@/lib/utils';
+import { describeVisitFrequency } from '@/lib/services/visit-frequency';
 
 /**
  * ASSISTENTE DE IMPORTACAO (secao 8).
@@ -73,6 +74,11 @@ interface ReviewRow {
   geocodeStatus: string;
   geocodeLabel: string | null;
   geocodeCandidates: Array<{ lat: number; lng: number; label: string }>;
+  monthlyVisits: number | null;
+  allowedWeekdays: number[];
+  preferredWeekdays: number[];
+  oneVisitWeekday: number | null;
+  fixedVisitDate: string | null;
   issues: RowIssue[];
 }
 
@@ -99,7 +105,14 @@ export function ImportWizard() {
   const [mapping, setMapping] = React.useState<Record<string, string>>({});
   const [review, setReview] = React.useState<ReviewResult | null>(null);
   const [overrides, setOverrides] = React.useState<Record<number, { category?: string; skip?: boolean; latitude?: number; longitude?: number }>>({});
-  const [summary, setSummary] = React.useState<{ created: number; updated: number; skipped: number; withoutLocation: number } | null>(null);
+  const [summary, setSummary] = React.useState<{
+    created: number;
+    updated: number;
+    skipped: number;
+    withoutLocation: number;
+    outOfMonth?: number;
+    frequencyMode?: boolean;
+  } | null>(null);
 
   async function handleFile(file: File) {
     setBusy(true);
@@ -280,6 +293,14 @@ export function ImportWizard() {
               </p>
             </div>
 
+            {summary.frequencyMode && (
+              <Alert tone="info">
+                O planejamento agora segue a frequência da planilha: cada clínica entra no mês quantas
+                vezes você pediu, nos dias combinados.
+                {summary.outOfMonth ? ` ${summary.outOfMonth} clínica(s) da carteira que não estão nesta planilha ficaram fora deste mês.` : ''}
+              </Alert>
+            )}
+
             {summary.withoutLocation > 0 && (
               <Alert tone="warning">
                 {summary.withoutLocation} clínica(s) ficaram sem localização e não entrarão no roteiro
@@ -390,7 +411,7 @@ function UploadStep({ onFile, busy }: { onFile: (file: File) => void; busy: bool
         <div className="mt-4 rounded-lg bg-ink-50 px-4 py-3 text-[11px] leading-relaxed text-ink-500">
           <p className="font-medium text-ink-700">O que a planilha precisa ter</p>
           <p className="mt-1">
-            No mínimo <strong>nome</strong> e <strong>categoria</strong> (Cat 1 / Cat 2 / Cat 3).
+            No mínimo <strong>nome</strong> e <strong>categoria</strong> (Fixos / Vari 1 / Vari 2).
             Endereço, bairro, cidade e CEP melhoram muito a localização, porque nome e bairro sozinhos
             frequentemente não bastam para encontrar o endereço exato. Também aceitamos uma linha por
             veterinário, com a categoria sendo o nome da aba (CAT 1, CAT 2, CAT 3).
@@ -485,6 +506,17 @@ function ReviewStep({
                         linha {row.index + 2} · {row.neighborhood ?? 'sem bairro'}
                         {row.city && ` · ${row.city}`}
                       </p>
+                      {row.monthlyVisits !== null && (
+                        <p className="mt-0.5 text-[11px] font-medium text-ink-600">
+                          {describeVisitFrequency({
+                            visits: row.monthlyVisits,
+                            allowedWeekdays: row.allowedWeekdays,
+                            preferredWeekdays: row.preferredWeekdays,
+                            oneVisitWeekday: row.oneVisitWeekday,
+                          })}
+                          {row.fixedVisitDate && ` · dia ${row.fixedVisitDate.slice(8, 10)}/${row.fixedVisitDate.slice(5, 7)}`}
+                        </p>
+                      )}
 
                       <div className="mt-1.5 space-y-1">
                         {row.issues.map((issue, i) => (
@@ -557,7 +589,7 @@ function ReviewStep({
                             </span>
                           )}
                           <Badge tone={row.category === 'CAT1' ? 'cat1' : row.category === 'CAT2' ? 'cat2' : 'cat3'}>
-                            {row.category.replace('CAT', 'Cat ')}
+                            {categoryLabel(row.category)}
                           </Badge>
                         </div>
                       ) : (
@@ -572,9 +604,9 @@ function ReviewStep({
                           className="h-7 w-28 text-[11px]"
                         >
                           <option value="">Categoria...</option>
-                          <option value="CAT1">Cat 1</option>
-                          <option value="CAT2">Cat 2</option>
-                          <option value="CAT3">Cat 3</option>
+                          <option value="CAT1">Fixos</option>
+                          <option value="CAT2">Vari 1</option>
+                          <option value="CAT3">Vari 2</option>
                         </Select>
                       )}
 

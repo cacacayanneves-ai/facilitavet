@@ -20,6 +20,11 @@ export function visitWeightOf(clinic: PlannerClinic): number {
 }
 const visitsOf = visitWeightOf;
 
+/** Visitas pedidas no mes pela frequencia; sem frequencia definida conta 1. */
+function monthlyVisitsOf(clinic: PlannerClinic): number {
+  return clinic.monthlyVisits ?? 1;
+}
+
 /**
  * Etapas 1-3 do motor: quem entra no mes.
  *
@@ -43,9 +48,18 @@ export function selectClinicsForMonth(
   referenceDate: Date,
 ): SelectionResult {
   const warnings: PlannerWarning[] = [];
-  const requiredCategories = requiredCategoriesFor(rules, year, month);
+  const frequencyMode = rules.mode === 'frequency';
+  // Modo frequencia: a planilha ja disse quem entra no mes. Ciclo e cotas
+  // nao se aplicam — cortar uma clinica que a planilha pediu seria errado.
+  const requiredCategories: CategoryCode[] = frequencyMode
+    ? (['CAT1', 'CAT2', 'CAT3'] as CategoryCode[]).filter((cat) =>
+        clinics.some((c) => c.category === cat && monthlyVisitsOf(c) > 0),
+      )
+    : requiredCategoriesFor(rules, year, month);
 
-  const eligible = clinics.filter((c) => requiredCategories.includes(c.category));
+  const eligible = clinics.filter(
+    (c) => requiredCategories.includes(c.category) && (!frequencyMode || monthlyVisitsOf(c) > 0),
+  );
 
   const withCoords = eligible.filter((c) => Number.isFinite(c.lat) && Number.isFinite(c.lng));
   const skippedNoCoordinates = eligible
@@ -69,6 +83,25 @@ export function selectClinicsForMonth(
       category,
       withCoords.filter((c) => c.category === category).sort(comparePriority(referenceDate)),
     );
+  }
+
+  if (frequencyMode) {
+    const selected = requiredCategories.flatMap((cat) => byCategory.get(cat) ?? []);
+    const perCategory: Record<CategoryCode, number> = { CAT1: 0, CAT2: 0, CAT3: 0 };
+    const perCategoryStops: Record<CategoryCode, number> = { CAT1: 0, CAT2: 0, CAT3: 0 };
+    for (const clinic of selected) {
+      perCategory[clinic.category] += visitsOf(clinic);
+      perCategoryStops[clinic.category] += 1;
+    }
+    return {
+      selected,
+      requiredCategories,
+      perCategory,
+      perCategoryStops,
+      totalVisits: sum(Object.values(perCategory)),
+      skippedNoCoordinates,
+      warnings,
+    };
   }
 
   // Cota de visitas por categoria: min(configurado, disponivel na carteira).

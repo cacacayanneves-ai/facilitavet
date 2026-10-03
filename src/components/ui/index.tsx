@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { Eye, EyeOff } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, categoryLabel } from '@/lib/utils';
 
 /* ==========================================================================
    Componentes base do Facilita Vet.
@@ -156,7 +156,7 @@ export function Badge({
 
 export function CategoryBadge({ category, className }: { category: string; className?: string }) {
   const tone = category === 'CAT1' ? 'cat1' : category === 'CAT2' ? 'cat2' : 'cat3';
-  const label = category === 'CAT1' ? 'Cat 1' : category === 'CAT2' ? 'Cat 2' : 'Cat 3';
+  const label = categoryLabel(category);
   return (
     <Badge tone={tone} className={className}>
       {label}

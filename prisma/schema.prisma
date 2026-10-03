@@ -243,6 +243,21 @@ model Clinic {
 
   active Boolean @default(true)
 
+  /// Visitas exigidas no mes corrente, vindas da coluna de frequencia da
+  /// planilha. null = clinica nao gerida por frequencia (segue o ciclo de
+  /// categorias); 0 = fora deste mes. Reimportar a planilha atualiza o mes.
+  monthlyVisits     Int?
+  /// Toda visita cai num destes dias (0=dom..6=sab). Vazio = qualquer dia.
+  allowedWeekdays   Int[]     @default([])
+  /// Preferencia de dia, nao obrigatoria.
+  preferredWeekdays Int[]     @default([])
+  /// Clinica com 2+ visitas: uma delas neste dia ("um dia na quinta").
+  oneVisitWeekday   Int?
+  /// Data marcada para a visita ("colocar dia 16 de outubro").
+  fixedVisitDate    DateTime? @db.Date
+  /// Texto original da frequencia, para conferir a interpretacao.
+  visitRule         String?
+
   // Seams para o CRM/inteligencia futura (potencial, frequencia ideal, etc.)
   priority Int  @default(0)
   metadata Json @default("{}")

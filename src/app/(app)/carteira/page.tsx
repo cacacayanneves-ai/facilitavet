@@ -2,7 +2,8 @@ import { requireUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { Topbar } from '@/components/layout/topbar';
 import { ClinicsWorkspace } from './clinics-workspace';
-import { todayKey } from '@/lib/utils';
+import { formatDate, todayKey } from '@/lib/utils';
+import { describeVisitFrequency } from '@/lib/services/visit-frequency';
 
 export const metadata = { title: 'Carteira' };
 export const dynamic = 'force-dynamic';
@@ -57,6 +58,15 @@ export default async function ClinicsPage() {
             longitude: c.longitude,
             veterinarians: c.veterinarians,
             visitSplits: c.visitSplits,
+            visitRule:
+              c.monthlyVisits === null
+                ? null
+                : `${describeVisitFrequency({
+                    visits: c.monthlyVisits,
+                    allowedWeekdays: c.allowedWeekdays,
+                    preferredWeekdays: c.preferredWeekdays,
+                    oneVisitWeekday: c.oneVisitWeekday,
+                  })}${c.fixedVisitDate ? ` · dia ${formatDate(c.fixedVisitDate)}` : ''}`,
             geocodeStatus: c.geocodeStatus,
             lastVisitedAt: c.lastVisitedAt?.toISOString() ?? null,
             nextVisitDate: nextByClinic.get(c.id) ?? null,

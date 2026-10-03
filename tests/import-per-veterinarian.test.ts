@@ -114,7 +114,7 @@ describe('planilha real: uma linha por veterinario, categoria = aba', () => {
     expect(result.rows).toHaveLength(1);
     expect(result.rows[0].Categoria).toBe('CAT1');
     expect(result.rows[0]['Quantidade de veterinários']).toBe('4');
-    expect(result.notices.some((n) => n.includes('Cinco Estrelas') && n.includes('mantida CAT1'))).toBe(true);
+    expect(result.notices.some((n) => n.includes('Cinco Estrelas') && n.includes('mantida Fixos'))).toBe(true);
   });
 
   it('veterinario sem clinica preenchida nao e contado e vira aviso, nao erro silencioso', async () => {
@@ -193,6 +193,52 @@ describe('planilha real: uma linha por veterinario, categoria = aba', () => {
     expect(result.notices).toHaveLength(0);
   });
 
+  it('planilha atual (FIXOS / VARI 1 / VARI 2): frequência, data marcada e abas de apoio ignoradas', async () => {
+    const header = ['NOME ', 'CPF', 'BAIRRO', 'CARTEIRA', 'VISITEI', 'DE ONDE', 'ENDEREÇO', 'FREQUENCIA DE VISITA'];
+    const buffer = await buildWorkbook([
+      {
+        name: 'FIXOS',
+        header,
+        rows: [
+          // CEP incrementado pelo "arrastar" do Sheets: so a 1a linha vale.
+          ['Ana', '', 'CAMPO GRANDE', 'SIM', 'SET OK', 'LAVET', 'Est. do Cabuçu, 2059 - Campo Grande, RJ, 23017-250', '2x no mês em dias alternados'],
+          ['Bia', '', 'CAMPO GRANDE', 'SIM', 'SET OK', 'LAVET', 'Est. do Cabuçu, 2059 - Campo Grande, RJ, 23017-251', '2x no mês em dias alternados'],
+          ['Caio', '', 'BANGU', 'SIM', 'SET OK', 'LIDER PET', 'R. Falcão Padilha, 80 - Bangu, RJ', '1x no mês sempre sexta'],
+        ],
+      },
+      {
+        name: 'VARI 1',
+        header,
+        rows: [['Duda', '', 'BANGU', 'SIM', 'colocar dia 16 de outubro', 'DANIELLE GODINHO', 'R. Roque Barbosa, 785 - Bangu, RJ', '1x no mês']],
+      },
+      {
+        name: 'VARI 2',
+        header,
+        rows: [['Eva', '', 'COSMOS', 'SIM', '', 'DOMICILIO', 'veterinario que faço visita online, NÃO COLOCAR NO ROTEIRO', '']],
+      },
+      // Copia consolidada e listas de apoio: nao podem duplicar ninguem.
+      { name: 'todos', header, rows: [['Ana', 'cat 1', 'CAMPO GRANDE', 'SIM', 'SET OK', 'LAVET', 'x', '1x no mês']] },
+      { name: 'PDVs', header: ['PDVs', 'OUT'], rows: [['REAL VETCOR', '']] },
+    ]);
+
+    const result = await parseSpreadsheet('cobertura.xlsx', buffer);
+    const byName = Object.fromEntries(result.rows.map((r) => [r['Nome da clínica'], r]));
+
+    expect(result.rows).toHaveLength(4);
+    expect(byName.LAVET).toMatchObject({
+      Categoria: 'CAT1',
+      'Quantidade de veterinários': '2',
+      'Endereço': 'Est. do Cabuçu, 2059 - Campo Grande, RJ, 23017-250',
+      'Frequência de visita': '2x no mês em dias alternados',
+    });
+    expect(byName['LIDER PET']['Frequência de visita']).toBe('1x no mês sempre sexta');
+    expect(byName['DANIELLE GODINHO']).toMatchObject({ Categoria: 'CAT2', 'Data marcada': 'colocar dia 16 de outubro' });
+    // Anotacao no lugar do endereco vira observacao, nunca endereco.
+    expect(byName.DOMICILIO).toMatchObject({ Categoria: 'CAT3', 'Endereço': '', 'Frequência de visita': '' });
+    expect(byName.DOMICILIO['Observações']).toContain('NÃO COLOCAR NO ROTEIRO');
+    expect(result.notices.some((n) => n.includes('Abas ignoradas') && n.includes('todos') && n.includes('PDVs'))).toBe(true);
+  });
+
   // Guarda o arquivo servido em /exemplo-carteira-facilitavet.xlsx (tela de
   // importação): se um ajuste nos sinonimos de coluna um dia parar de
   // reconhecer o proprio exemplo do produto, e sinal de regressao real.
@@ -202,6 +248,7 @@ describe('planilha real: uma linha por veterinario, categoria = aba', () => {
 
     expect(result.rows).toHaveLength(6);
     expect(result.rows.map((r) => r.Categoria)).toEqual(['CAT1', 'CAT1', 'CAT2', 'CAT2', 'CAT3', 'CAT3']);
-    expect(result.notices.some((n) => n.includes('sem nenhum veterinário nomeado'))).toBe(true);
+    expect(result.columns).toContain('Frequência de visita');
+    expect(result.notices.some((n) => n.includes('não colocar no roteiro'))).toBe(true);
   });
 });
