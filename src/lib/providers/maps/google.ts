@@ -1,6 +1,6 @@
 import { logger } from '@/lib/logger';
 import type { LatLng, TravelMatrix, TravelMatrixRequest } from '@/lib/route-planner';
-import { buildGeocodeString, classifyCandidates, type GeocodeCandidate, type GeocodeQuery, type GeocodeResult, type MapsProvider } from './types';
+import { buildGeocodeString, resolveCandidates, type GeocodeCandidate, type GeocodeQuery, type GeocodeResult, type MapsProvider } from './types';
 
 interface GoogleOptions {
   apiKey: string;
@@ -79,7 +79,7 @@ export class GoogleMapsProvider implements MapsProvider {
       placeId: r.place_id,
     }));
 
-    return { status: classifyCandidates(candidates), candidates, provider: this.name };
+    return { ...resolveCandidates(candidates, query), provider: this.name };
   }
 
   /** Places API (New) Text Search — acha o estabelecimento pelo nome. */
@@ -122,7 +122,7 @@ export class GoogleMapsProvider implements MapsProvider {
       placeId: p.id,
     }));
 
-    return { status: classifyCandidates(candidates), candidates, provider: this.name };
+    return { ...resolveCandidates(candidates, query), provider: this.name };
   }
 
   async travelMatrix(request: TravelMatrixRequest): Promise<TravelMatrix> {

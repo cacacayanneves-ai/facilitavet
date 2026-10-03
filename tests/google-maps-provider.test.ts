@@ -171,3 +171,49 @@ describe('erro HTTP da Places/Routes API', () => {
     );
   });
 });
+
+describe('ambiguidade falsa: o sistema decide sozinho quando a planilha ja respondeu', () => {
+  const geocodeResponse = (results: Array<{ address: string; lat: number; lng: number; type?: string }>) =>
+    jsonResponse({
+      status: 'OK',
+      results: results.map((r, i) => ({
+        formatted_address: r.address,
+        place_id: `p${i}`,
+        geometry: { location: { lat: r.lat, lng: r.lng }, location_type: r.type ?? 'ROOFTOP' },
+      })),
+    });
+
+  it('o mesmo lugar devolvido duas vezes vira um candidato so', async () => {
+    const label = 'Estr. do Mato Alto, 5620 - Guaratiba, Rio de Janeiro - RJ, 23030-320, Brasil';
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(geocodeResponse([
+      { address: label, lat: -22.9801, lng: -43.6012 },
+      { address: label, lat: -22.9803, lng: -43.6015 },
+    ])));
+    const provider = new GoogleMapsProvider({ apiKey: 'k', elementBudget: 4000 });
+    const result = await provider.geocode({ name: 'FAZENDA MODELO', address: 'Estr. do Mato Alto, 5620 - Guaratiba' });
+    expect(result.status).toBe('RESOLVED');
+    expect(result.candidates).toHaveLength(1);
+  });
+
+  it('com numero no endereco da planilha, escolhe o candidato com o mesmo numero', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(geocodeResponse([
+      { address: 'Av. de Santa Cruz, 5806 - Bangu, Rio de Janeiro - RJ, 21830-009, Brasil', lat: -22.876, lng: -43.47 },
+      { address: 'Av. de Santa Cruz, 6141 - Bangu, Rio de Janeiro - RJ, 21830-008, Brasil', lat: -22.879, lng: -43.48 },
+    ])));
+    const provider = new GoogleMapsProvider({ apiKey: 'k', elementBudget: 4000 });
+    const result = await provider.geocode({ name: 'APX BANGU', address: 'Av. de Santa Cruz, 6141 - Bangu, Rio de Janeiro - RJ, 21830-008' });
+    expect(result.status).toBe('RESOLVED');
+    expect(result.candidates[0].label).toContain('6141');
+  });
+
+  it('dois candidatos com o mesmo numero em lugares diferentes continuam com o usuario', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(geocodeResponse([
+      { address: 'R. Rio da Prata, 831 - Bangu, Rio de Janeiro - RJ', lat: -22.87, lng: -43.46 },
+      { address: 'R. Rio da Prata, 831 - Campo Grande, Rio de Janeiro - RJ', lat: -22.9, lng: -43.56 },
+    ])));
+    const provider = new GoogleMapsProvider({ apiKey: 'k', elementBudget: 4000 });
+    const result = await provider.geocode({ name: 'CHIPI CARE', address: 'R. Rio da Prata, 831' });
+    expect(result.status).toBe('AMBIGUOUS');
+  });
+});
+

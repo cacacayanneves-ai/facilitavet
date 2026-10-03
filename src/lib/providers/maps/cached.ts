@@ -3,7 +3,7 @@ import { prisma } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import type { TravelMatrix, TravelMatrixRequest } from '@/lib/route-planner';
 import type { GeocodeQuery, GeocodeResult, MapsProvider } from './types';
-import { buildGeocodeString, classifyCandidates } from './types';
+import { buildGeocodeString, resolveCandidates } from './types';
 
 /**
  * Decorador de cache (secoes 77 e 78).
@@ -40,7 +40,7 @@ export class CachedMapsProvider implements MapsProvider {
     if (cached) {
       this.stats.geocodeHits += 1;
       const candidates = (cached.candidates as unknown as GeocodeResult['candidates']) ?? [];
-      return { status: classifyCandidates(candidates), provider: cached.provider, candidates };
+      return { ...resolveCandidates(candidates, query), provider: cached.provider };
     }
 
     this.stats.geocodeMisses += 1;
