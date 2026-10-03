@@ -223,6 +223,7 @@ function summarize(rows: NormalizedRow[]) {
     duplicates,
     located,
     ambiguous,
-    needsAttention: rows.length - located,
+    // Clinica fora do mes pela planilha nao precisa de localizacao agora.
+    needsAttention: rows.filter((r) => (r.latitude === null || r.longitude === null) && r.monthlyVisits !== 0).length,
   };
 }

@@ -688,7 +688,10 @@ export async function validateRows(args: {
     const address = get('address') || null;
     const postalCode = get('postalCode') || null;
 
-    if (latitude === null && !address && !postalCode && !neighborhood) {
+    // Fora do mes (frequencia vazia) nao vai ao roteiro: sem localizacao nao
+    // e problema agora, e avisar so polui a revisao.
+    const outOfMonth = Boolean(mapping.frequency) && parseVisitFrequency(get('frequency')).visits === 0;
+    if (latitude === null && !address && !postalCode && !neighborhood && !outOfMonth) {
       issues.push({
         level: 'warning',
         code: 'NO_LOCATION_DATA',

@@ -453,7 +453,7 @@ function ReviewStep({
   const s = review.summary;
 
   const rows = onlyProblems
-    ? review.rows.filter((r) => r.issues.length > 0 || r.latitude === null)
+    ? review.rows.filter((r) => r.issues.length > 0 || (r.latitude === null && r.monthlyVisits !== 0))
     : review.rows;
 
   return (
