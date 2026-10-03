@@ -40,6 +40,8 @@ const CANONICAL = [
   { field: 'visitSplits', label: 'Dividir visita em quantas partes', required: false },
   { field: 'notes', label: 'Observações', required: false },
   { field: 'active', label: 'Ativo', required: false },
+  { field: 'frequency', label: 'Frequência de visita', required: false },
+  { field: 'fixedDate', label: 'Data marcada', required: false },
 ] as const;
 
 type Step = 'upload' | 'mapping' | 'review' | 'done';
@@ -235,7 +237,7 @@ export function ImportWizard() {
               <table className="w-full text-left text-[11px]">
                 <thead className="bg-ink-50">
                   <tr>
-                    {upload.columns.slice(0, 7).map((column) => (
+                    {upload.columns.slice(0, 9).map((column) => (
                       <th key={column} className="px-2.5 py-1.5 font-semibold text-ink-500">{column}</th>
                     ))}
                   </tr>
@@ -243,9 +245,11 @@ export function ImportWizard() {
                 <tbody className="divide-y divide-ink-100">
                   {upload.preview.slice(0, 4).map((row, i) => (
                     <tr key={i}>
-                      {upload.columns.slice(0, 7).map((column) => (
+                      {upload.columns.slice(0, 9).map((column) => (
                         <td key={column} className="max-w-40 truncate px-2.5 py-1.5 text-ink-600">
-                          {row[column]}
+                          {column === mapping.category && /^CAT[123]$/.test(row[column] ?? '')
+                            ? categoryLabel(row[column])
+                            : row[column]}
                         </td>
                       ))}
                     </tr>
