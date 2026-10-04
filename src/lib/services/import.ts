@@ -6,7 +6,7 @@ import { prisma } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { getMapsProvider } from '@/lib/providers/maps';
 import { normalizeKey } from '@/lib/route-planner';
-import { parseFixedDate, parseVisitFrequency } from './visit-frequency';
+import { parseFixedDate, parseVisitedMonth, parseVisitFrequency } from './visit-frequency';
 import { categoryLabel } from '@/lib/utils';
 
 /**
@@ -38,7 +38,8 @@ export type CanonicalField =
   | 'notes'
   | 'active'
   | 'frequency'
-  | 'fixedDate';
+  | 'fixedDate'
+  | 'lastVisit';
 
 export const CANONICAL_FIELDS: Array<{ field: CanonicalField; label: string; required: boolean }> = [
   { field: 'name', label: 'Nome da clinica', required: true },
@@ -59,6 +60,7 @@ export const CANONICAL_FIELDS: Array<{ field: CanonicalField; label: string; req
   { field: 'active', label: 'Ativo', required: false },
   { field: 'frequency', label: 'Frequencia de visita', required: false },
   { field: 'fixedDate', label: 'Data marcada', required: false },
+  { field: 'lastVisit', label: 'Ultima visita', required: false },
 ];
 
 /** Sinonimos por campo — cobre os cabecalhos que aparecem na pratica. */
@@ -84,6 +86,7 @@ const FIELD_SYNONYMS: Record<CanonicalField, string[]> = {
   active: ['ativo', 'ativa', 'status', 'situacao'],
   frequency: ['frequencia de visita', 'frequencia de visitas', 'frequencia', 'visitas no mes'],
   fixedDate: ['data marcada', 'data da visita', 'data fixa', 'agendar', 'visitei esse mes', 'visitei'],
+  lastVisit: ['ultima visita', 'data da ultima visita'],
 };
 
 export interface ParsedSheet {
@@ -311,6 +314,7 @@ function aggregatePerVeterinarianWorkbook(sheets: ExcelJS.Worksheet[], ignoredSh
     frequencies: string[];
     schedules: string[];
     note: string;
+    lastVisit: string | null;
   }
 
   const groups = new Map<string, Group>();
@@ -356,6 +360,7 @@ function aggregatePerVeterinarianWorkbook(sheets: ExcelJS.Worksheet[], ignoredSh
         frequencies: [],
         schedules: [],
         note: '',
+        lastVisit: null,
       };
       // Garante que a clinica tenha uma categoria mesmo se esta linha nao
       // tiver veterinario nomeado (senao uma clinica so-pendente nao teria
@@ -372,6 +377,8 @@ function aggregatePerVeterinarianWorkbook(sheets: ExcelJS.Worksheet[], ignoredSh
       if (frequency) group.frequencies.push(frequency);
       const schedule = cellAt(roles.schedule);
       if (schedule && parseFixedDate(schedule)) group.schedules.push(schedule);
+      const visited = parseVisitedMonth(schedule);
+      if (visited && (!group.lastVisit || visited > group.lastVisit)) group.lastVisit = visited;
 
       if (vetName) {
         group.veterinarians += 1;
@@ -390,6 +397,7 @@ function aggregatePerVeterinarianWorkbook(sheets: ExcelJS.Worksheet[], ignoredSh
   const outOfMonth: string[] = [];
   const fixedDates: string[] = [];
   const excludedByNote: string[] = [];
+  let visitedCount = 0;
   const rows: Array<Record<string, string>> = [];
   let totalNamedVets = 0;
 
@@ -447,7 +455,9 @@ function aggregatePerVeterinarianWorkbook(sheets: ExcelJS.Worksheet[], ignoredSh
       'Frequência de visita': group.note ? '' : frequency,
       'Data marcada': schedule,
       'Observações': group.note,
+      'Última visita': group.lastVisit ?? '',
     });
+    if (group.lastVisit) visitedCount += 1;
     if (group.note) excludedByNote.push(label(group));
   }
 
@@ -460,7 +470,12 @@ function aggregatePerVeterinarianWorkbook(sheets: ExcelJS.Worksheet[], ignoredSh
   }
   if (hasFrequency) {
     notices.push(
-      'Usamos a coluna de frequência de visita: cada clínica entra no mês quantas vezes a frequência pede, e restrições como "sempre sexta" ou "terça ou quinta" são respeitadas no roteiro. Para o próximo mês, basta alterar a frequência na planilha e importar de novo.',
+      'Usamos a coluna de frequência de visita: "2x no mês" vira duas idas em dias diferentes, e restrições como "sempre sexta" ou "terça ou quinta" são respeitadas no roteiro. Quem entra em cada mês continua seguindo o ciclo (Cat 1 + Cat 2, depois Cat 1 + Cat 3); frequência vazia deixa a clínica fora do roteiro.',
+    );
+  }
+  if (visitedCount > 0) {
+    notices.push(
+      `${visitedCount} clínica(s) marcadas como visitadas no mês passado (ex.: "SET OK"): no próximo planejamento, quem não foi visitado tem prioridade.`,
     );
   }
   if (excludedByNote.length > 0) {
@@ -500,6 +515,7 @@ function aggregatePerVeterinarianWorkbook(sheets: ExcelJS.Worksheet[], ignoredSh
   const columns = ['Nome da clínica', 'Categoria', 'Bairro', 'Endereço', 'Quantidade de veterinários', 'Dividir visita em quantas partes'];
   if (hasFrequency) columns.push('Frequência de visita', 'Data marcada');
   if (excludedByNote.length > 0) columns.push('Observações');
+  if (visitedCount > 0) columns.push('Última visita');
 
   return { columns, rows, notices };
 }
@@ -603,6 +619,8 @@ export interface NormalizedRow {
   fixedVisitDate: string | null;
   /** Texto original da frequencia. */
   visitRule: string | null;
+  /** "YYYY-MM-DD" da ultima visita conhecida pela planilha. */
+  lastVisitedAt: string | null;
   issues: RowIssue[];
   geocodeStatus: 'PENDING' | 'RESOLVED' | 'AMBIGUOUS' | 'FAILED' | 'MANUAL';
   geocodeLabel: string | null;
@@ -779,6 +797,7 @@ export async function validateRows(args: {
       oneVisitWeekday: frequency?.oneVisitWeekday ?? null,
       fixedVisitDate,
       visitRule,
+      lastVisitedAt: mapping.lastVisit ? /^\d{4}-\d{2}-\d{2}$/.test(get('lastVisit')) ? get('lastVisit') : parseVisitedMonth(get('lastVisit')) : null,
       issues,
       geocodeStatus: latitude !== null && longitude !== null ? 'MANUAL' : 'PENDING',
       geocodeLabel: null,
@@ -883,7 +902,7 @@ export async function commitRows(args: {
 
   const existingClinics = await prisma.clinic.findMany({
     where: { organizationId: args.organizationId },
-    select: { id: true, name: true, neighborhood: true, latitude: true, longitude: true },
+    select: { id: true, name: true, neighborhood: true, latitude: true, longitude: true, lastVisitedAt: true },
   });
   const byKey = new Map(
     existingClinics.map((c) => [clinicKey(c.name, c.neighborhood), c] as const),
@@ -950,6 +969,12 @@ export async function commitRows(args: {
             visitRule: row.visitRule,
           };
 
+    // Ultima visita: so avanca (uma visita registrada no app vale mais que o
+    // "SET OK" aproximado da planilha).
+    const lastVisit = row.lastVisitedAt ? new Date(`${row.lastVisitedAt}T12:00:00.000Z`) : null;
+    const visitHistory =
+      lastVisit && (!existing?.lastVisitedAt || existing.lastVisitedAt < lastVisit) ? { lastVisitedAt: lastVisit } : {};
+
     const data = {
       name: row.name,
       category: row.category,
@@ -960,6 +985,7 @@ export async function commitRows(args: {
       ...optional,
       ...location,
       ...schedule,
+      ...visitHistory,
     };
 
     if (existing) {
@@ -974,6 +1000,7 @@ export async function commitRows(args: {
         neighborhood: created.neighborhood,
         latitude: created.latitude,
         longitude: created.longitude,
+        lastVisitedAt: created.lastVisitedAt,
       });
       summary.created += 1;
     }

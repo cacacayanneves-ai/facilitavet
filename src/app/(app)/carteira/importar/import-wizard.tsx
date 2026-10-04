@@ -42,6 +42,7 @@ const CANONICAL = [
   { field: 'active', label: 'Ativo', required: false },
   { field: 'frequency', label: 'Frequência de visita', required: false },
   { field: 'fixedDate', label: 'Data marcada', required: false },
+  { field: 'lastVisit', label: 'Última visita', required: false },
 ] as const;
 
 type Step = 'upload' | 'mapping' | 'review' | 'done';
@@ -113,7 +114,6 @@ export function ImportWizard() {
     skipped: number;
     withoutLocation: number;
     outOfMonth?: number;
-    frequencyMode?: boolean;
   } | null>(null);
 
   async function handleFile(file: File) {
@@ -297,13 +297,12 @@ export function ImportWizard() {
               </p>
             </div>
 
-            {summary.frequencyMode && (
+            {summary.outOfMonth ? (
               <Alert tone="info">
-                O planejamento agora segue a frequência da planilha: cada clínica entra no mês quantas
-                vezes você pediu, nos dias combinados.
-                {summary.outOfMonth ? ` ${summary.outOfMonth} clínica(s) da carteira que não estão nesta planilha ficaram fora deste mês.` : ''}
+                {summary.outOfMonth} clínica(s) da carteira que não estão nesta planilha ficaram fora do
+                roteiro (continuam na Carteira).
               </Alert>
-            )}
+            ) : null}
 
             {summary.withoutLocation > 0 && (
               <Alert tone="warning">

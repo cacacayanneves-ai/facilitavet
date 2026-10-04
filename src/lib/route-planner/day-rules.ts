@@ -37,8 +37,13 @@ interface Args {
 const WEEKDAY_NAME = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
 /** Quanto a preferencia pode afastar uma clinica da regiao do dia original. */
 const PREFERENCE_MAX_DETOUR_METERS = 4_000;
-/** Quanto um dia esvaziado pode puxar uma clinica de outra regiao. */
-const FILL_MAX_DETOUR_METERS = 8_000;
+/**
+ * Quanto um dia abaixo do minimo pode puxar uma clinica de outra regiao. Com
+ * 160 visitas para ~21 dias, regioes pequenas (Bangu/Realengo) se espalham por
+ * dias demais; 15 km (Bangu-Campo Grande ~10 km) troca um dia de 3 visitas por
+ * um desvio aceitavel.
+ */
+const FILL_MAX_DETOUR_METERS = 15_000;
 
 export function applyDayRules(args: Args): { clusters: number[][]; warnings: DayRuleWarning[] } {
   const { clusterOrder, pointIds, weights, clinicById, availableDays, maxPerDay } = args;

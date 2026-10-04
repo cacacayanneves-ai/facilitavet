@@ -20,6 +20,7 @@ import {
 export const categoryRuleSchema = z.object({
   frequency: z.enum(['monthly', 'alternating', 'manual']),
   targetCount: z.number().int().min(0).max(10_000),
+  minCount: z.number().int().min(0).max(10_000).optional(),
   enabled: z.boolean(),
 });
 
@@ -33,7 +34,6 @@ export const categoryRuleSetSchema = z.object({
   anchorMonth: z.number().int().min(1).max(12),
   anchorYear: z.number().int().min(2000).max(2100),
   enforceExclusivity: z.boolean(),
-  mode: z.enum(['cycle', 'frequency']).optional(),
 });
 
 export const scoreWeightsSchema = z.object({

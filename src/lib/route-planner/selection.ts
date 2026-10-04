@@ -33,11 +33,19 @@ function monthlyVisitsOf(clinic: PlannerClinic): number {
  * nao e "pegue as 80 primeiras clinicas", e "pegue clinicas ate somar 80
  * visitas" — um problema de empacotamento, nao de contagem.
  *
- * A selecao respeita, nesta ordem:
- *  1. as categorias exigidas pelo ciclo do mes;
- *  2. a cota de VISITAS de cada categoria;
- *  3. a meta mensal total de VISITAS;
- *  4. desempate por "ha mais tempo sem visita" e prioridade comercial.
+ * Ciclo comercial real (2 meses, 160 visitas/mes): mes 1 = 80 Cat 1 + 80
+ * Cat 2; mes 2 = 80 Cat 1 + Cat 3, com minimo de 40 Cat 3 e o restante podendo
+ * vir da Cat 2. A selecao respeita, nesta ordem:
+ *  0. fora: clinica que a planilha tirou do mes (visita online, ausente da
+ *     planilha) nunca entra;
+ *  1. clinica com DATA MARCADA no mes entra sempre, qualquer categoria — e
+ *     uma instrucao explicita, nao uma sugestao;
+ *  2. as categorias exigidas pelo ciclo, cada uma ate a sua cota de VISITAS;
+ *  3. faltando visitas para a meta do mes, completa com a outra categoria
+ *     alternada (a Cat 3 menor que 80 e completada pela Cat 2);
+ *  4. desempate por "ha mais tempo sem visita" e prioridade comercial — o que
+ *     faz o complemento preferir quem NAO foi visitado no mes anterior e
+ *     aumenta os veterinarios diferentes do ciclo.
  */
 export function selectClinicsForMonth(
   clinics: PlannerClinic[],
@@ -48,24 +56,19 @@ export function selectClinicsForMonth(
   referenceDate: Date,
 ): SelectionResult {
   const warnings: PlannerWarning[] = [];
-  const frequencyMode = rules.mode === 'frequency';
-  // Modo frequencia: a planilha ja disse quem entra no mes. Ciclo e cotas
-  // nao se aplicam — cortar uma clinica que a planilha pediu seria errado.
-  const requiredCategories: CategoryCode[] = frequencyMode
-    ? (['CAT1', 'CAT2', 'CAT3'] as CategoryCode[]).filter((cat) =>
-        clinics.some((c) => c.category === cat && monthlyVisitsOf(c) > 0),
-      )
-    : requiredCategoriesFor(rules, year, month);
-
-  const eligible = clinics.filter(
-    (c) => requiredCategories.includes(c.category) && (!frequencyMode || monthlyVisitsOf(c) > 0),
+  const requiredCategories = requiredCategoriesFor(rules, year, month);
+  const complementCategories = rules.alternatingOrder.filter(
+    (c) => rules.rules[c]?.enabled && !requiredCategories.includes(c),
   );
 
-  const withCoords = eligible.filter((c) => Number.isFinite(c.lat) && Number.isFinite(c.lng));
-  const skippedNoCoordinates = eligible
-    .filter((c) => !Number.isFinite(c.lat) || !Number.isFinite(c.lng))
-    .map((c) => c.id);
+  const monthPrefix = `${year}-${String(month).padStart(2, '0')}-`;
+  const isForced = (c: PlannerClinic) => Boolean(c.fixedDate?.startsWith(monthPrefix));
+  const hasCoords = (c: PlannerClinic) => Number.isFinite(c.lat) && Number.isFinite(c.lng);
 
+  const inMonth = clinics.filter((c) => monthlyVisitsOf(c) > 0);
+  const eligible = inMonth.filter((c) => requiredCategories.includes(c.category) || isForced(c));
+
+  const skippedNoCoordinates = eligible.filter((c) => !hasCoords(c)).map((c) => c.id);
   if (skippedNoCoordinates.length > 0) {
     const lostVisits = eligible
       .filter((c) => skippedNoCoordinates.includes(c.id))
@@ -77,77 +80,97 @@ export function selectClinicsForMonth(
     });
   }
 
-  const byCategory = new Map<CategoryCode, PlannerClinic[]>();
-  for (const category of requiredCategories) {
-    byCategory.set(
-      category,
-      withCoords.filter((c) => c.category === category).sort(comparePriority(referenceDate)),
-    );
-  }
+  const priority = comparePriority(referenceDate);
+  const forced = eligible.filter((c) => isForced(c) && hasCoords(c));
+  const forcedIds = new Set(forced.map((c) => c.id));
+  const poolOf = (category: CategoryCode) =>
+    inMonth.filter((c) => c.category === category && hasCoords(c) && !forcedIds.has(c.id)).sort(priority);
 
-  if (frequencyMode) {
-    const selected = requiredCategories.flatMap((cat) => byCategory.get(cat) ?? []);
-    const perCategory: Record<CategoryCode, number> = { CAT1: 0, CAT2: 0, CAT3: 0 };
-    const perCategoryStops: Record<CategoryCode, number> = { CAT1: 0, CAT2: 0, CAT3: 0 };
-    for (const clinic of selected) {
-      perCategory[clinic.category] += visitsOf(clinic);
-      perCategoryStops[clinic.category] += 1;
-    }
-    return {
-      selected,
-      requiredCategories,
-      perCategory,
-      perCategoryStops,
-      totalVisits: sum(Object.values(perCategory)),
-      skippedNoCoordinates,
-      warnings,
-    };
-  }
+  const byCategory = new Map<CategoryCode, PlannerClinic[]>();
+  for (const category of requiredCategories) byCategory.set(category, poolOf(category));
 
   // Cota de visitas por categoria: min(configurado, disponivel na carteira).
+  const forcedVisitsOf = (category: CategoryCode) =>
+    forced.filter((c) => c.category === category).reduce((s, c) => s + visitsOf(c), 0);
   const quotas = new Map<CategoryCode, number>();
   for (const category of requiredCategories) {
     const configured = rules.rules[category]?.targetCount ?? 0;
-    const available = (byCategory.get(category) ?? []).reduce((sum, c) => sum + visitsOf(c), 0);
+    const available =
+      (byCategory.get(category) ?? []).reduce((s, c) => s + visitsOf(c), 0) + forcedVisitsOf(category);
     quotas.set(category, Math.min(configured, available));
   }
-
-  let totalQuota = sum([...quotas.values()]);
-
-  if (totalQuota > monthlyTarget) {
-    scaleQuotasDown(quotas, requiredCategories, monthlyTarget);
-    totalQuota = sum([...quotas.values()]);
-  } else if (totalQuota < monthlyTarget) {
-    // Sobra de meta: completa com o excedente das categorias do mes.
-    let remaining = monthlyTarget - totalQuota;
-    for (const category of requiredCategories) {
-      if (remaining <= 0) break;
-      const available = (byCategory.get(category) ?? []).reduce((s, c) => s + visitsOf(c), 0);
-      const current = quotas.get(category) ?? 0;
-      const extra = Math.min(remaining, available - current);
-      if (extra > 0) {
-        quotas.set(category, current + extra);
-        remaining -= extra;
-      }
-    }
-    if (remaining > 0) {
-      warnings.push({
-        code: 'TARGET_ABOVE_POOL',
-        message: `A meta de ${monthlyTarget} visitas é maior que a carteira disponível para ${requiredCategories.join(' + ')}. O plano foi gerado com ${monthlyTarget - remaining} visitas.`,
-        details: { requested: monthlyTarget, available: monthlyTarget - remaining },
-      });
-    }
-  }
+  if (sum([...quotas.values()]) > monthlyTarget) scaleQuotasDown(quotas, requiredCategories, monthlyTarget);
 
   const selected: PlannerClinic[] = [];
   const perCategory: Record<CategoryCode, number> = { CAT1: 0, CAT2: 0, CAT3: 0 };
   const perCategoryStops: Record<CategoryCode, number> = { CAT1: 0, CAT2: 0, CAT3: 0 };
+  const take = (picked: PlannerClinic[]) => {
+    for (const clinic of picked) {
+      if (!selected.includes(clinic)) selected.push(clinic);
+      perCategory[clinic.category] += visitsOf(clinic);
+      perCategoryStops[clinic.category] += 1;
+    }
+  };
+  take(forced);
 
   for (const category of requiredCategories) {
-    const picked = fillToVisitQuota(byCategory.get(category) ?? [], quotas.get(category) ?? 0);
-    selected.push(...picked.clinics);
-    perCategory[category] = picked.visits;
-    perCategoryStops[category] = picked.clinics.length;
+    const remaining = Math.max(0, (quotas.get(category) ?? 0) - forcedVisitsOf(category));
+    const picked = fillToVisitQuota(byCategory.get(category) ?? [], remaining);
+    take(picked.clinics);
+  }
+
+  const total = () => sum(Object.values(perCategory));
+  const leftover = (category: CategoryCode) =>
+    poolOf(category).filter((c) => !selected.includes(c));
+
+  // Sobra de meta: primeiro o excedente da categoria ALTERNADA do mes (Cat 3
+  // alem da cota)... A mensal (Cat 1) e fixa: a meta dela e o numero da
+  // carteira de fixos, nao um teto a ser estourado para fechar o mes.
+  const alternatingRequired = requiredCategories.filter((c) => rules.rules[c]?.frequency !== 'monthly');
+  const monthlyRequired = requiredCategories.filter((c) => rules.rules[c]?.frequency === 'monthly');
+  for (const category of alternatingRequired) {
+    if (total() >= monthlyTarget) break;
+    take(fillToVisitQuota(leftover(category), monthlyTarget - total()).clinics);
+  }
+
+  // ...depois a outra categoria alternada (ex.: Cat 3 com menos de 80)...
+  for (const category of complementCategories) {
+    if (total() >= monthlyTarget) break;
+    const before = perCategory[category];
+    take(fillToVisitQuota(leftover(category), monthlyTarget - total()).clinics);
+    const added = perCategory[category] - before;
+    if (added > 0) {
+      warnings.push({
+        code: 'CATEGORY_COMPLEMENT',
+        message: `${added} visita(s) de ${label(category)} completaram a meta do mês (${requiredCategories.map(label).join(' + ')} não somavam ${monthlyTarget}).`,
+        details: { category, visits: added },
+      });
+    }
+  }
+
+  // ...e so em ultimo caso mais visitas da categoria mensal.
+  for (const category of monthlyRequired) {
+    if (total() >= monthlyTarget) break;
+    take(fillToVisitQuota(leftover(category), monthlyTarget - total()).clinics);
+  }
+
+  if (total() < monthlyTarget) {
+    warnings.push({
+      code: 'TARGET_ABOVE_POOL',
+      message: `A meta de ${monthlyTarget} visitas é maior que a carteira disponível. O plano foi gerado com ${total()} visitas.`,
+      details: { requested: monthlyTarget, available: total() },
+    });
+  }
+
+  for (const category of requiredCategories) {
+    const minimum = rules.rules[category]?.minCount;
+    if (minimum !== undefined && perCategory[category] < minimum) {
+      warnings.push({
+        code: 'CATEGORY_BELOW_MINIMUM',
+        message: `${label(category)} ficou com ${perCategory[category]} visita(s), abaixo do mínimo de ${minimum} do ciclo.`,
+        details: { category, visits: perCategory[category], minimum },
+      });
+    }
   }
 
   return {
@@ -155,10 +178,14 @@ export function selectClinicsForMonth(
     requiredCategories,
     perCategory,
     perCategoryStops,
-    totalVisits: sum(Object.values(perCategory)),
+    totalVisits: total(),
     skippedNoCoordinates,
     warnings,
   };
+}
+
+function label(category: CategoryCode): string {
+  return category.replace('CAT', 'Cat ');
 }
 
 /**

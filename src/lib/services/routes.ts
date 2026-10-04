@@ -154,16 +154,17 @@ export async function swapStop(args: {
     throw new Error('Essa clínica já está nesta rota.');
   }
 
-  // A troca nao pode furar o ciclo comercial do mes. No modo frequencia nao
-  // ha ciclo: vale qualquer clinica que a planilha poe no mes.
-  const rules = parseCategoryRules(settings.categoryRules);
-  if (rules.mode === 'frequency') {
-    if ((replacement.monthlyVisits ?? 1) <= 0) {
-      throw new Error(`${replacement.name} está fora deste mês pela frequência da planilha.`);
-    }
+  if ((replacement.monthlyVisits ?? 1) <= 0) {
+    throw new Error(`${replacement.name} está fora do roteiro pela planilha (frequência vazia).`);
   }
-  const requiredCategories = requiredCategoriesFor(rules, route.monthlyPlan.year, route.monthlyPlan.month);
-  if (rules.mode !== 'frequency' && !requiredCategories.includes(replacement.category)) {
+  // A troca nao pode furar o ciclo comercial do mes. A outra categoria
+  // alternada tambem vale: e ela que completa a meta quando a do mes e menor.
+  const requiredCategories = monthCategories(
+    parseCategoryRules(settings.categoryRules),
+    route.monthlyPlan.year,
+    route.monthlyPlan.month,
+  );
+  if (!requiredCategories.includes(replacement.category)) {
     throw new Error(
       `${replacement.name} é ${categoryLabel(replacement.category)}, categoria fora do ciclo deste mês (${requiredCategories.map(categoryLabel).join(' + ')}).`,
     );
@@ -204,10 +205,10 @@ export async function alternativesForStop(args: {
   // Alternativas precisam ser ADEQUADAS, nao apenas proximas: uma clinica Cat 3
   // num mes de Cat 1 + Cat 2 esta fora do ciclo comercial e nao pode ser
   // sugerida, por mais perto que fique.
-  const rules = parseCategoryRules(settings.categoryRules);
-  const frequencyMode = rules.mode === 'frequency';
-  const requiredCategories = (
-    frequencyMode ? ['CAT1', 'CAT2', 'CAT3'] : requiredCategoriesFor(rules, route.monthlyPlan.year, route.monthlyPlan.month)
+  const requiredCategories = monthCategories(
+    parseCategoryRules(settings.categoryRules),
+    route.monthlyPlan.year,
+    route.monthlyPlan.month,
   ) as Category[];
 
   // Nao sugerimos clinicas ja planejadas no mesmo mes: trocar por outra que ja
@@ -226,8 +227,8 @@ export async function alternativesForStop(args: {
       latitude: { not: null },
       longitude: { not: null },
       id: { notIn: [...excluded] },
-      // Fora do mes pela planilha (frequencia 0) nao e alternativa.
-      ...(frequencyMode ? { OR: [{ monthlyVisits: null }, { monthlyVisits: { gt: 0 } }] } : {}),
+      // Fora do roteiro pela planilha (frequencia vazia) nao e alternativa.
+      OR: [{ monthlyVisits: null }, { monthlyVisits: { gt: 0 } }],
     },
     take: 400,
   });
@@ -429,4 +430,11 @@ export async function refreshPlanTotals(tx: TxClient, monthlyPlanId: string): Pr
       averageScore: Math.round(averageScore * 10) / 10,
     },
   });
+}
+
+/** Categorias validas no mes: as do ciclo + as alternadas que podem completa-lo. */
+function monthCategories(rules: ReturnType<typeof parseCategoryRules>, year: number, month: number): string[] {
+  const required = requiredCategoriesFor(rules, year, month);
+  const complement = rules.alternatingOrder.filter((c) => rules.rules[c]?.enabled);
+  return [...new Set([...required, ...complement])];
 }

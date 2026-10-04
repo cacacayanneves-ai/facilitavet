@@ -54,8 +54,8 @@ export interface PlannerClinic extends LatLng {
   splitOf?: string;
 
   /**
-   * Visitas exigidas no mes (coluna de frequencia da planilha). So vale no
-   * modo `frequency` das regras: 0 = fora do mes; ausente/null = 1.
+   * Visitas no mes pela coluna de frequencia da planilha: 0 = fora do mes
+   * (visita online, ausente da planilha); ausente/null = segue o ciclo.
    */
   monthlyVisits?: number | null;
   /** Toda visita cai num destes dias (0=dom..6=sab). Vazio = qualquer dia. */
@@ -82,6 +82,12 @@ export interface CategoryRule {
    * exigida — nao quantas clinicas. 80 visitas Cat 1 podem ser ~40 clinicas.
    */
   targetCount: number;
+  /**
+   * Minimo aceitavel de visitas no mes em que a categoria e exigida (ex.: Cat
+   * 3 com meta 80 e minimo 40; o restante pode vir da Cat 2). Abaixo disso o
+   * plano avisa. Ausente = sem minimo alem da meta.
+   */
+  minCount?: number;
   enabled: boolean;
 }
 
@@ -98,12 +104,6 @@ export interface CategoryRuleSet {
   anchorYear: number;
   /** Impede que uma clinica seja exigida por duas categorias no mesmo mes. */
   enforceExclusivity: boolean;
-  /**
-   * `cycle` (padrao): o ciclo de categorias e as cotas decidem quem entra no
-   * mes. `frequency`: a frequencia de cada clinica (planilha) decide — toda
-   * clinica com visita no mes entra, sem cota, e o ciclo e ignorado.
-   */
-  mode?: 'cycle' | 'frequency';
 }
 
 /** Pesos do score. Centralizados — nunca espalhados pelo codigo. */
@@ -259,7 +259,9 @@ export interface PlannerWarning {
     | 'CLINIC_EXCEEDS_DAY'
     | 'DAY_EXCEEDS_WORKDAY'
     | 'SPLIT_SEPARATION_UNMET'
-    | 'DAY_RULE_UNMET';
+    | 'DAY_RULE_UNMET'
+    | 'CATEGORY_COMPLEMENT'
+    | 'CATEGORY_BELOW_MINIMUM';
   message: string;
   details?: Record<string, unknown>;
 }

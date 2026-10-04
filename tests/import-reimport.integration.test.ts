@@ -66,6 +66,7 @@ function row(overrides: Partial<NormalizedRow>): NormalizedRow {
     oneVisitWeekday: null,
     fixedVisitDate: null,
     visitRule: null,
+    lastVisitedAt: null,
     issues: [],
     geocodeStatus: 'AMBIGUOUS',
     geocodeLabel: null,

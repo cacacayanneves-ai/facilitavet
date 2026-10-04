@@ -1,7 +1,5 @@
 import { z } from 'zod';
-import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
-import { parseCategoryRules } from '@/lib/services/settings';
 import { requireApiUser } from '@/lib/auth';
 import { fail, handle } from '@/lib/api';
 import {
@@ -181,23 +179,7 @@ export async function PATCH(request: Request) {
 
     await prisma.importBatch.update({ where: { id: batch.id }, data: { status: 'COMMITTED' } });
 
-    // Planilha com frequencia: o planejamento passa a seguir a frequencia de
-    // cada clinica em vez do ciclo de categorias. Sem isso o usuario importaria
-    // "2x no mes" e o plano continuaria cortando a Cat 2 em meses alternados.
-    let frequencyMode = false;
-    if (prepared.some((row) => row.monthlyVisits !== null)) {
-      const settings = await prisma.userSettings.findUnique({ where: { userId: user.id } });
-      const rules = parseCategoryRules(settings?.categoryRules);
-      if (rules.mode !== 'frequency') {
-        await prisma.userSettings.update({
-          where: { userId: user.id },
-          data: { categoryRules: { ...rules, mode: 'frequency' } as unknown as Prisma.InputJsonObject },
-        });
-      }
-      frequencyMode = true;
-    }
-
-    return { ...summary, frequencyMode };
+    return summary;
   });
 }
 

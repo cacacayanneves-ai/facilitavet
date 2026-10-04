@@ -146,6 +146,25 @@ export function parseFixedDate(raw: string | null | undefined, reference: Date =
   return date.toISOString().slice(0, 10);
 }
 
+const MONTH_PREFIX: Record<string, number> = {
+  jan: 1, fev: 2, mar: 3, abr: 4, mai: 5, jun: 6, jul: 7, ago: 8, set: 9, out: 10, nov: 11, dez: 12,
+};
+
+/**
+ * "SET OK" (visitado em setembro) -> "2026-09-15". O dia exato nao existe na
+ * planilha; o meio do mes basta para ordenar quem foi visto ha mais tempo.
+ * Sem ano: o mais recente que nao esteja no futuro.
+ */
+export function parseVisitedMonth(raw: string | null | undefined, reference: Date = new Date()): string | null {
+  const text = normalize(raw ?? '');
+  const match = text.match(/\b(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)[a-z]*\.?\s*(ok|feito|visitad)/);
+  if (!match) return null;
+  const month = MONTH_PREFIX[match[1]];
+  let year = reference.getUTCFullYear();
+  if (Date.UTC(year, month - 1, 15) > reference.getTime()) year -= 1;
+  return `${year}-${String(month).padStart(2, '0')}-15`;
+}
+
 const WEEKDAY_SHORT = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
 
 /** Resumo curto para a tela: "2x · uma na qui", "1x · só sex", "1x · pref. qua". */

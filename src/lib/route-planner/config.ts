@@ -27,7 +27,8 @@ export const DEFAULT_CATEGORY_RULES: CategoryRuleSet = {
   rules: {
     CAT1: { frequency: 'monthly', targetCount: 80, enabled: true },
     CAT2: { frequency: 'alternating', targetCount: 80, enabled: true },
-    CAT3: { frequency: 'alternating', targetCount: 80, enabled: true },
+    // Cat 3 pode ficar entre 40 e 80: o restante do mes vem da Cat 2.
+    CAT3: { frequency: 'alternating', targetCount: 80, minCount: 40, enabled: true },
   },
   alternatingOrder: ['CAT2', 'CAT3'],
   anchorMonth: 1,

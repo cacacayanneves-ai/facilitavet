@@ -455,17 +455,6 @@ export function SettingsWorkspace(props: {
       {tab === 'regras' && (
         <div className="space-y-4">
           <Card>
-            <CardContent className="space-y-3">
-              <Switch
-                checked={rules.mode === 'frequency'}
-                onChange={(value) => setRules((r) => ({ ...r, mode: value ? 'frequency' : 'cycle' }))}
-                label="Planejar pela frequência da planilha"
-                description="Cada clínica entra no mês quantas vezes a coluna de frequência pede, com os dias combinados. Desligado, quem entra é decidido pelo ciclo de categorias abaixo. Liga sozinho ao importar uma planilha com frequência."
-              />
-            </CardContent>
-          </Card>
-
-          <Card className={cn(rules.mode === 'frequency' && 'opacity-60')}>
             <CardContent className="space-y-4">
               <div>
                 <p className="text-sm font-semibold text-ink-900">Ciclo de categorias</p>
@@ -523,6 +512,35 @@ export function SettingsWorkspace(props: {
                               className="tabular h-8 w-20 text-xs"
                             />
                           </div>
+
+                          {rule.frequency === 'alternating' && (
+                            <div
+                              className="flex items-center gap-1.5"
+                              title="Mínimo aceitável no mês da categoria. O que faltar para a meta mensal vem da outra categoria alternada."
+                            >
+                              <span className="text-[11px] text-ink-500">mínimo</span>
+                              <Input
+                                type="number"
+                                min={0}
+                                max={1000}
+                                value={rule.minCount ?? ''}
+                                placeholder="—"
+                                onChange={(e) =>
+                                  setRules((r) => ({
+                                    ...r,
+                                    rules: {
+                                      ...r.rules,
+                                      [category]: {
+                                        ...rule,
+                                        minCount: e.target.value === '' ? undefined : Number(e.target.value),
+                                      },
+                                    },
+                                  }))
+                                }
+                                className="tabular h-8 w-20 text-xs"
+                              />
+                            </div>
+                          )}
 
                           <Switch
                             checked={rule.enabled}

@@ -31,6 +31,17 @@ function clinic(id: string, overrides: Partial<PlannerClinic> = {}): PlannerClin
   };
 }
 
+// Todas as categorias todo mes: isola as regras de dia da selecao por ciclo.
+const ALL_MONTHLY = {
+  ...DEFAULT_CATEGORY_RULES,
+  rules: {
+    CAT1: { frequency: 'monthly' as const, targetCount: 999, enabled: true },
+    CAT2: { frequency: 'monthly' as const, targetCount: 999, enabled: true },
+    CAT3: { frequency: 'monthly' as const, targetCount: 999, enabled: true },
+  },
+  alternatingOrder: [],
+};
+
 async function plan(clinics: PlannerClinic[]) {
   return generatePlan({
     clinics,
@@ -40,7 +51,7 @@ async function plan(clinics: PlannerClinic[]) {
     year: 2026,
     origin: null,
     destination: null,
-    categoryRules: { ...DEFAULT_CATEGORY_RULES, mode: 'frequency' },
+    categoryRules: ALL_MONTHLY,
     preferences: { ...DEFAULT_PREFERENCES, seed: 3 },
   });
 }
@@ -82,7 +93,7 @@ describe('regras de dia no planejamento', () => {
     expect(days.some((d) => weekdayOf(d) === 4)).toBe(true);
   });
 
-  it('modo frequencia: so entra quem tem visita no mes, sem cota de categoria', async () => {
+  it('frequencia vazia (visita online / fora da planilha) nunca entra no roteiro', async () => {
     const result = await plan([
       ...base,
       clinic('fora', { monthlyVisits: 0 }),
